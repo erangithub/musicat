@@ -8,11 +8,11 @@ ACCIDENTAL_NAME = {-2: 'bb', -1: 'b', 0: '', 1: '#', 2: '##'}
 class SyntaxError(Exception):
     pass
 
-class NamedNote:
+class Pitch:
     def __init__(self, name: str):
         match = re.fullmatch('([a-gA-G])(bb|b|#|##)?(-1|[0-7])?', name)
         if not match:
-            raise SyntaxError(f'Illegal note name "{name}"')
+            raise SyntaxError(f'Illegal pitch name "{name}"')
         self.name = name
         self.root = match.group(1)
         self.accidental = match.group(2)
@@ -31,31 +31,32 @@ class NamedNote:
         return self.name
 
     def __repr__(self):
-        return f"NamedNote('{self.name}')"
+        return f"Pitch('{self.name}')"
 
 
 def major_scale(root: str):
-    root_note = NamedNote(root)
+    root_pitch = Pitch(root)
 
-    start = LETTERS.index(root_note.root.lower())
-    root_pitch = (NATURAL_PITCH[start] + ACCIDENTAL_OFFSET[root_note.accidental]) % 12
+    start = LETTERS.index(root_pitch.root.lower())
+    root_pc = (NATURAL_PITCH[start] + ACCIDENTAL_OFFSET[root_pitch.accidental]) % 12
 
-    note_names = []
+    pitches = []
     for degree in range(7):
         idx = (start + degree) % 7
         letter = LETTERS[idx]
-        pitch = (root_pitch + NATURAL_PITCH[degree]) % 12
-        delta = (pitch - NATURAL_PITCH[idx]) % 12
+        pitch_pc = (root_pc + NATURAL_PITCH[degree]) % 12
+        delta = (pitch_pc - NATURAL_PITCH[idx]) % 12
         if delta > 6:
             delta -= 12
-        note_names.append(NamedNote(letter + ACCIDENTAL_NAME[delta]))
-    return note_names 
+        pitches.append(Pitch(letter + ACCIDENTAL_NAME[delta]))
+    return pitches 
 
-def notes(text):
+def pitches(text):
     tokens = text.split()
     for t in tokens:
-        nn = NamedNote(t)
-        print(nn)
+        p = Pitch(t)
+        print(p)
+
 
 if __name__ == "__main__":
     print('Welcome to complib')
