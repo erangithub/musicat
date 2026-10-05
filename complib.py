@@ -77,6 +77,9 @@ class Rest(Event):
         return f'r {self.duration}'
 
 
+Sequence = list[Event]
+
+
 def major_scale(root: str):
     root_pitch = Pitch(root)
 
