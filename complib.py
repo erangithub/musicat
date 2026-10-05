@@ -1,9 +1,20 @@
 import re
+from fractions import Fraction
+from math import lcm
 
 LETTERS = 'cdefgab'
 NATURAL_PITCH = (0, 2, 4, 5, 7, 9, 11)
 ACCIDENTAL_OFFSET = {None: 0, 'bb': -2, 'b': -1, '#': 1, '##': 2}
 ACCIDENTAL_NAME = {-2: 'bb', -1: 'b', 0: '', 1: '#', 2: '##'}
+
+WHOLE = Fraction(1)
+HALF = Fraction(1, 2)
+QUARTER = Fraction(1, 4)
+EIGHTH = Fraction(1, 8)
+SIXTEENTH = Fraction(1, 16)
+THIRTY_SECOND = Fraction(1, 32)
+DOT = Fraction(3, 2)
+DOUBLE_DOT = Fraction(7, 4)
 
 class SyntaxError(Exception):
     pass
@@ -27,6 +38,15 @@ class Pitch:
 
         return base
 
+    def __eq__(self, other):
+        if not isinstance(other, Pitch):
+            return NotImplemented
+        return (self.root.lower(), self.accidental, self.octave) == \
+               (other.root.lower(), other.accidental, other.octave)
+
+    def __hash__(self):
+        return hash((self.root.lower(), self.accidental, self.octave))
+
     def __str__(self):
         return self.name
 
@@ -34,21 +54,29 @@ class Pitch:
         return f"Pitch('{self.name}')"
 
 
-class Duration:
-    def __str__(self):
-        return '1/4'
-
-    def __repr__(self):
-        return 'Duration()'
-
-
 class Event:
-    def __init__(self, pitches=None, duration=None):
-        self.pitches = [Pitch(p) if isinstance(p, str) else p for p in (pitches or [])]
-        self.duration = Duration() if duration is None else duration
+    def __init__(self, pitches=None, duration=QUARTER):
+        parsed = []
+        for pitch in (pitches or []):
+            if isinstance(pitch, str):
+                pitch = Pitch(pitch)
+            elif not isinstance(pitch, Pitch):
+                raise SyntaxError(f'Illegal pitch {pitch!r}')
+            parsed.append(pitch)
+        self.pitches = parsed
+        self.duration = duration
 
     def midipitches(self):
         return [p.midipitch() for p in self.pitches]
+
+    def __eq__(self, other):
+        if not isinstance(other, Event):
+            return NotImplemented
+        return (type(self) is type(other) and self.pitches == other.pitches
+                and self.duration == other.duration)
+
+    def __hash__(self):
+        return hash((type(self), tuple(self.pitches), self.duration))
 
     def __str__(self):
         body = ' '.join(str(p) for p in self.pitches)
@@ -61,7 +89,7 @@ class Event:
 
 
 class Note(Event):
-    def __init__(self, pitch, duration=None):
+    def __init__(self, pitch, duration=QUARTER):
         super().__init__([pitch], duration)
 
 
@@ -70,7 +98,7 @@ class Chord(Event):
 
 
 class Rest(Event):
-    def __init__(self, duration=None):
+    def __init__(self, duration=QUARTER):
         super().__init__(None, duration)
 
     def __str__(self):
@@ -78,6 +106,8 @@ class Rest(Event):
 
 
 Sequence = list[Event]
+Duration = Fraction
+Rhythm = list[Duration]
 
 
 def major_scale(root: str):
@@ -99,7 +129,44 @@ def major_scale(root: str):
 
 def to_pitches(text):
     tokens = text.split()
-    return map(Pitch, tokens)
+    return list(map(Pitch, tokens))
+
+
+def to_rhythm(text):
+    tokens = text.split()
+    durations = []
+    for token in tokens:
+        match = re.fullmatch(r'(\d*)(?:/(\d+))?(\.*)', token)
+        if not match:
+            raise SyntaxError(f'Illegal duration "{token}"')
+        numerator, denominator, dots = match.group(1), match.group(2), match.group(3)
+        if not numerator and denominator is None:
+            raise SyntaxError(f'Illegal duration "{token}"')
+        if denominator is None:
+            duration = Fraction(int(numerator))
+        else:
+            denominator = int(denominator)
+            if not denominator:
+                raise SyntaxError(f'Illegal duration "{token}"')
+            duration = Fraction(int(numerator or 1), denominator)
+        durations.append(duration * (2 - Fraction(1, 2 ** len(dots))))
+    return durations
+
+
+def combine(pitches, rhythm):
+    if not rhythm:
+        raise SyntaxError('Empty rhythm')
+    events = []
+    for i, group in enumerate(pitches):
+        group = group if isinstance(group, (list, tuple)) else [group]
+        duration = rhythm[i % len(rhythm)]
+        if not group:
+            events.append(Rest(duration))
+        elif len(group) == 1:
+            events.append(Note(group[0], duration))
+        else:
+            events.append(Chord(group, duration))
+    return events
 
 
 def show(musicxml=None):
@@ -119,20 +186,51 @@ def show(musicxml=None):
         pass
 
 
+def _duration_type(duration):
+    types = (('whole', WHOLE), ('half', HALF), ('quarter', QUARTER),
+             ('eighth', EIGHTH), ('16th', SIXTEENTH), ('32nd', THIRTY_SECOND),
+             ('64th', Fraction(1, 64)), ('128th', Fraction(1, 128)))
+    if not duration:
+        return 'quarter', 0, None, None
+    candidates = []
+    for name, base in types:
+        for dots in range(3):
+            plain = base * (2 - Fraction(1, 2 ** dots))
+            if duration == plain:
+                return name, dots, None, None
+            ratio = plain / duration
+            if 2 <= ratio.numerator <= 9 and ratio.numerator > ratio.denominator \
+                    and ratio.denominator in (1, 2, 4):
+                actual, normal = ratio.numerator, ratio.denominator
+                candidates.append((abs(float(ratio) - 1), name, dots, actual, normal))
+    if candidates:
+        _, name, dots, actual, normal = min(candidates)
+        return name, dots, actual, normal
+    nearest = min((abs(float(base - duration)), name) for name, base in types)[1]
+    return nearest, 0, None, None
+
+
 def show_seq(sequence: Sequence):
     if not sequence:
         raise SyntaxError('Empty sequence')
-    divisions = 4
-    per_measure = 4
+    units = lcm(4, *[event.duration.denominator for event in sequence])
+    divisions = units // 4
     accidental = {None: ('', 0), 'bb': ('flat-flat', -2), 'b': ('flat', -1),
                   '#': ('sharp', 1), '##': ('double-sharp', 2)}
 
     measures = []
     notes = []
+    filled = 0
     for event in sequence:
+        name, dots, actual, normal = _duration_type(event.duration)
+        dots_xml = '<dot/>' * dots
+        tuplet_xml = (f'<time-modification><actual-notes>{actual}</actual-notes>'
+                      f'<normal-notes>{normal}</normal-notes></time-modification>'
+                      if actual else '')
+        ticks = int(event.duration * units)
         if isinstance(event, Rest):
-            body = (f'<note><rest/><duration>{divisions}</duration>'
-                    '<voice>1</voice><type>quarter</type></note>')
+            body = (f'<note><rest/><duration>{ticks}</duration><voice>1</voice>'
+                    f'<type>{name}</type>{dots_xml}{tuplet_xml}</note>')
         elif isinstance(event, (Note, Chord)):
             body = ''
             for i, pitch in enumerate(event.pitches):
@@ -143,14 +241,16 @@ def show_seq(sequence: Sequence):
                 body += ('<note><chord/>' if i else '<note>') + (
                     f'<pitch><step>{pitch.root.upper()}</step>{alt}'
                     f'<octave>{octave}</octave></pitch>'
-                    f'<duration>{divisions}</duration><voice>1</voice>'
-                    f'<type>quarter</type>{acc}</note>')
+                    f'<duration>{ticks}</duration><voice>1</voice>'
+                    f'<type>{name}</type>{dots_xml}{acc}{tuplet_xml}</note>')
         else:
             raise SyntaxError(f'Illegal event {type(event).__name__}')
-        notes.append(body)
-        if len(notes) == per_measure:
+        if notes and filled + ticks > units:
             measures.append(''.join(notes))
             notes = []
+            filled = 0
+        notes.append(body)
+        filled += ticks
     if notes:
         measures.append(''.join(notes))
 
