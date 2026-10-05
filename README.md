@@ -90,6 +90,17 @@ combine(to_pitches('c d e f g a b c'), to_rhythm('/8'))        # one bar of eigh
 A chord is its own event, so `c <d f>` is a note followed by a chord, not a chord of `c d f` — write `<c d f>` for that.
 Unbalanced or nested brackets raise `SyntaxError`, as does an unknown pitch name.
 
+Chord pitches are voiced low to high: one that would land at or below the pitch before it moves up an octave, so
+`<c e g c>` is `c4 e4 g4 c5` and `<g c e>` is `g4 c5 e5`. The first pitch without an octave sits in octave 4, and octaves
+you write yourself are respected — `<c3 e g>` is `c3 e3 g3`, and `<c3 e4 g c>` wraps from the `e4` you gave:
+
+```python
+combine(to_pitches('<c e g c c>'), to_rhythm('1/2'))[0]   # Chord('c4 e4 g4 c5 c6', 1/2)
+```
+
+Single notes are left alone, so a melody may descend: `to_pitches('c e g c')` stays four pitch classes, and `c3` is how
+you ask for the lower c. A chord that would need an octave above 7 raises `SyntaxError`.
+
 `show_seq()` maps every duration to a MusicXML note type, dots and tuplet ratio, and derives `divisions` from the least
 common multiple of the denominators so each duration lands on a whole tick. `1/5` becomes a quarter with a 5:4 time
 modification, `1/12` an eighth with 3:2.
@@ -117,7 +128,7 @@ Pitch('c#4') == Pitch('db4')   # False — both are MIDI 61, but the spelling di
 | `DOT`, `DOUBLE_DOT` | `Fraction(3, 2)` and `Fraction(7, 4)`; multiply a note value to dot it, as in `QUARTER * DOT`. |
 | `Event(pitches, duration)` | Base class: anything that occupies time. Holds a `pitches` list and a `duration`. |
 | `Note(pitch, duration)` | An `Event` with one pitch. |
-| `Chord(pitches, duration)` | An `Event` with two or more pitches. |
+| `Chord(pitches, duration)` | An `Event` with two or more pitches, voiced low to high. |
 | `Rest(duration)` | An `Event` with no pitches. |
 | `Event.midipitches()` | MIDI numbers of the event's pitches, e.g. `[0, 4, 7]` for `c e g`. |
 | `major_scale(root)` | The seven pitches of the major scale, spelled correctly for the root (`major_scale('bb')` → `bb c d eb f g a`). |

@@ -94,7 +94,22 @@ class Note(Event):
 
 
 class Chord(Event):
-    pass
+    def __init__(self, pitches=None, duration=QUARTER):
+        super().__init__(pitches, duration)
+        voiced = []
+        running = None
+        for pitch in self.pitches:
+            if pitch.octave is not None:
+                voiced.append(pitch)
+                running = pitch.midipitch()
+                continue
+            base = pitch.midipitch()
+            octave = 4 if running is None else (running - base) // 12
+            if not -1 <= octave <= 7:
+                raise SyntaxError(f'Chord reaches past the octave range at {pitch}')
+            voiced.append(Pitch(f'{pitch.root}{pitch.accidental or ""}{octave}'))
+            running = base + 12 * (octave + 1)
+        self.pitches = voiced
 
 
 class Rest(Event):
