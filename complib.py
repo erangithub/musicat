@@ -51,12 +51,9 @@ def major_scale(root: str):
         pitches.append(Pitch(letter + ACCIDENTAL_NAME[delta]))
     return pitches 
 
-def pitches(text):
+def to_pitches(text):
     tokens = text.split()
-    for t in tokens:
-        p = Pitch(t)
-        print(p)
-
+    return map(Pitch, tokens)
 
 if __name__ == "__main__":
     print('Welcome to complib')
