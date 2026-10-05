@@ -39,7 +39,7 @@ Stop the server with `Ctrl-C`.
 ```python
 from complib import Pitch, to_pitches, to_rhythm, combine, show_seq, major_scale, show
 
-[p.name for p in to_pitches('c e g')]     # ['c', 'e', 'g']
+to_pitches('c <e g>')                      # [[c], [e, g]] — one list of pitches per event
 [str(p) for p in major_scale('d')]         # ['d', 'e', 'f#', 'g', 'a', 'b', 'c#']
 Pitch('f#4').midipitch()                   # 66
 to_rhythm('/4 1/8. /16')                   # [1/4, 3/16, 1/16]
@@ -69,12 +69,26 @@ Durations are whole-note relative `Fraction`s: `1` is a whole note, `1/4` a quar
 to_rhythm('1/4 1/8. /16')      # 1/4, 3/16, 1/16
 ```
 
-`combine(pitches, rhythm)` pairs pitches with durations, cycling the rhythm when it is shorter than the pitch list.
-Each item is a pitch, a list of pitches (a chord), or an empty list (a rest):
+`to_pitches` returns one list of pitches per event. `<...>` collects a chord, and an empty `<>` is a rest, so a rest can
+be written in the same text as the notes around it:
 
 ```python
-combine([['c', 'e'], [], to_pitches('g')], to_rhythm('1/2 1/4'))   # chord c e 1/2, rest 1/4, note g 1/2 (rhythm cycles)
+to_pitches('c <d f> e')     # [[c], [d, f], [e]]
+to_pitches('c <> <e g>')    # [[c], [], [e, g]]
 ```
+
+`combine(pitches, rhythm)` pairs those groups with durations, cycling the rhythm when it is shorter than the group list.
+Each group is a pitch or a list of pitches:
+
+```python
+combine(to_pitches('c <e g> <>'), to_rhythm('1/2 1/4 1/4'))   # c 1/2, chord e g 1/4, rest 1/4
+combine([['c', 'e'], []], to_rhythm('1/2 1/4'))               # chord c e 1/2, rest 1/4
+combine(['c', 'e'], to_rhythm('1/4 1/4'))                      # two notes
+combine(to_pitches('c d e f g a b c'), to_rhythm('/8'))        # one bar of eighths
+```
+
+A chord is its own event, so `c <d f>` is a note followed by a chord, not a chord of `c d f` — write `<c d f>` for that.
+Unbalanced or nested brackets raise `SyntaxError`, as does an unknown pitch name.
 
 `show_seq()` maps every duration to a MusicXML note type, dots and tuplet ratio, and derives `divisions` from the least
 common multiple of the denominators so each duration lands on a whole tick. `1/5` becomes a quarter with a 5:4 time
@@ -107,9 +121,9 @@ Pitch('c#4') == Pitch('db4')   # False — both are MIDI 61, but the spelling di
 | `Rest(duration)` | An `Event` with no pitches. |
 | `Event.midipitches()` | MIDI numbers of the event's pitches, e.g. `[0, 4, 7]` for `c e g`. |
 | `major_scale(root)` | The seven pitches of the major scale, spelled correctly for the root (`major_scale('bb')` → `bb c d eb f g a`). |
-| `to_pitches(text)` | Parses whitespace-separated pitch names into a list of `Pitch`. |
+| `to_pitches(text)` | Parses pitch text into one list of pitches per event. `<d f>` is a chord, `<>` a rest. |
 | `to_rhythm(text)` | Parses whitespace-separated durations into a list of `Fraction`. |
-| `combine(pitches, rhythm)` | Zips pitches with durations into a list of events, cycling the rhythm as needed. |
+| `combine(pitches, rhythm)` | Zips groups of pitches with durations into a list of events, cycling the rhythm as needed. Accepts the output of `to_pitches`, or hand-written lists. |
 | `show(musicxml=None)` | Renders MusicXML through Verovio and displays it inline in Jupyter. Defaults to `mock/probe.musicxml`. |
 | `show_seq(sequence)` | Renders a sequence of events as MusicXML in memory and displays it. |
 

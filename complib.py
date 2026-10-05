@@ -128,8 +128,19 @@ def major_scale(root: str):
     return pitches 
 
 def to_pitches(text):
-    tokens = text.split()
-    return list(map(Pitch, tokens))
+    groups = []
+    position = 0
+    for match in re.finditer(r'<([^<>]*)>|[^<>]+', text):
+        if match.start() != position:
+            raise SyntaxError(f'Illegal chord near "{text[position:].strip()}"')
+        position = match.end()
+        if match.group(1) is None:
+            groups.extend([Pitch(pitch)] for pitch in match.group().split())
+        else:
+            groups.append([Pitch(pitch) for pitch in match.group(1).split()])
+    if position != len(text):
+        raise SyntaxError(f'Illegal chord near "{text[position:].strip()}"')
+    return groups
 
 
 def to_rhythm(text):
