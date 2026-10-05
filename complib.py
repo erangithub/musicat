@@ -102,11 +102,14 @@ def to_pitches(text):
     return map(Pitch, tokens)
 
 
-def show():
+def show(musicxml=None):
     import verovio
+    if musicxml is None:
+        with open('mock/probe.musicxml') as f:
+            musicxml = f.read()
     toolkit = verovio.toolkit()
     toolkit.setOptions({'adjustPageHeight': True, 'scale': 40})
-    if not toolkit.loadData(open('mock/probe.musicxml').read()):
+    if not toolkit.loadData(musicxml):
         raise SyntaxError('Illegal MusicXML')
     svg = toolkit.renderToSVG(1)
     try:
@@ -114,6 +117,53 @@ def show():
         display(SVG(svg))
     except ImportError:
         pass
+
+
+def show_seq(sequence: Sequence):
+    if not sequence:
+        raise SyntaxError('Empty sequence')
+    divisions = 4
+    per_measure = 4
+    accidental = {None: ('', 0), 'bb': ('flat-flat', -2), 'b': ('flat', -1),
+                  '#': ('sharp', 1), '##': ('double-sharp', 2)}
+
+    measures = []
+    notes = []
+    for event in sequence:
+        if isinstance(event, Rest):
+            body = (f'<note><rest/><duration>{divisions}</duration>'
+                    '<voice>1</voice><type>quarter</type></note>')
+        elif isinstance(event, (Note, Chord)):
+            body = ''
+            for i, pitch in enumerate(event.pitches):
+                symbol, alter = accidental[pitch.accidental]
+                acc = f'<accidental>{symbol}</accidental>' if symbol else ''
+                alt = f'<alter>{alter}</alter>' if alter else ''
+                octave = 4 if pitch.octave is None else pitch.octave
+                body += ('<note><chord/>' if i else '<note>') + (
+                    f'<pitch><step>{pitch.root.upper()}</step>{alt}'
+                    f'<octave>{octave}</octave></pitch>'
+                    f'<duration>{divisions}</duration><voice>1</voice>'
+                    f'<type>quarter</type>{acc}</note>')
+        else:
+            raise SyntaxError(f'Illegal event {type(event).__name__}')
+        notes.append(body)
+        if len(notes) == per_measure:
+            measures.append(''.join(notes))
+            notes = []
+    if notes:
+        measures.append(''.join(notes))
+
+    attributes = (f'<attributes><divisions>{divisions}</divisions>'
+                  '<key><fifths>0</fifths></key>'
+                  '<time><beats>4</beats><beat-type>4</beat-type></time>'
+                  '<clef><sign>G</sign><line>2</line></clef></attributes>')
+    body = ''.join(f'<measure number="{i}">{attributes if i == 1 else ""}{m}</measure>'
+                   for i, m in enumerate(measures, 1))
+    show('<?xml version="1.0" encoding="UTF-8"?>'
+         '<score-partwise version="4.0"><part-list>'
+         '<score-part id="P1"><part-name>Music</part-name></score-part></part-list>'
+         f'<part id="P1">{body}</part></score-partwise>')
 
 if __name__ == "__main__":
     print('Welcome to complib')
