@@ -55,6 +55,20 @@ def to_pitches(text):
     tokens = text.split()
     return map(Pitch, tokens)
 
+
+def show():
+    import verovio
+    toolkit = verovio.toolkit()
+    toolkit.setOptions({'adjustPageHeight': True, 'scale': 40})
+    if not toolkit.loadData(open('mock/probe.musicxml').read()):
+        raise SyntaxError('Illegal MusicXML')
+    svg = toolkit.renderToSVG(1)
+    try:
+        from IPython.display import SVG, display
+        display(SVG(svg))
+    except ImportError:
+        pass
+
 if __name__ == "__main__":
     print('Welcome to complib')
     print(major_scale('d'))
