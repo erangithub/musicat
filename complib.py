@@ -34,6 +34,29 @@ class Pitch:
         return f"Pitch('{self.name}')"
 
 
+class Duration:
+    def __str__(self):
+        return '1/4'
+
+    def __repr__(self):
+        return 'Duration()'
+
+
+class Note:
+    def __init__(self, pitch, duration=None):
+        self.pitch = Pitch(pitch) if isinstance(pitch, str) else pitch
+        self.duration = Duration() if duration is None else duration
+
+    def midipitch(self):
+        return self.pitch.midipitch()
+
+    def __str__(self):
+        return f'{self.pitch} {self.duration}'
+
+    def __repr__(self):
+        return f"Note('{self.pitch}', {self.duration})"
+
+
 def major_scale(root: str):
     root_pitch = Pitch(root)
 
