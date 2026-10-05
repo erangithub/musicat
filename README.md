@@ -59,6 +59,12 @@ print-quality output, LilyPond (`brew install lilypond`) compiles the same music
 |---|---|
 | `Pitch(name)` | Parses `c`, `f#`, `bb3`, `c-1`. Attributes: `name`, `root`, `accidental`, `octave`. |
 | `Pitch.midipitch()` | MIDI note number, e.g. `c4` → 60. Without an octave it returns the pitch class. |
+| `Duration()` | A quarter note. Opaque for now — it takes no arguments. |
+| `Event(pitches, duration)` | Base class: anything that occupies time. Holds a `pitches` list and a `duration`. |
+| `Note(pitch, duration)` | An `Event` with one pitch. |
+| `Chord(pitches, duration)` | An `Event` with two or more pitches. |
+| `Rest(duration)` | An `Event` with no pitches. |
+| `Event.midipitches()` | MIDI numbers of the event's pitches, e.g. `[0, 4, 7]` for `c e g`. |
 | `major_scale(root)` | The seven pitches of the major scale, spelled correctly for the root (`major_scale('bb')` → `bb c d eb f g a`). |
 | `to_pitches(text)` | Parses whitespace-separated pitch names into an iterator of `Pitch`. |
 | `show(musicxml)` | Renders MusicXML through Verovio and displays it inline in Jupyter. |

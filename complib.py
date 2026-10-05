@@ -42,19 +42,39 @@ class Duration:
         return 'Duration()'
 
 
-class Note:
-    def __init__(self, pitch, duration=None):
-        self.pitch = Pitch(pitch) if isinstance(pitch, str) else pitch
+class Event:
+    def __init__(self, pitches=None, duration=None):
+        self.pitches = [Pitch(p) if isinstance(p, str) else p for p in (pitches or [])]
         self.duration = Duration() if duration is None else duration
 
-    def midipitch(self):
-        return self.pitch.midipitch()
+    def midipitches(self):
+        return [p.midipitch() for p in self.pitches]
 
     def __str__(self):
-        return f'{self.pitch} {self.duration}'
+        body = ' '.join(str(p) for p in self.pitches)
+        return f'{body} {self.duration}' if body else str(self.duration)
 
     def __repr__(self):
-        return f"Note('{self.pitch}', {self.duration})"
+        body = ' '.join(str(p) for p in self.pitches)
+        pitches = f"'{body}', " if body else ''
+        return f"{type(self).__name__}({pitches}{self.duration})"
+
+
+class Note(Event):
+    def __init__(self, pitch, duration=None):
+        super().__init__([pitch], duration)
+
+
+class Chord(Event):
+    pass
+
+
+class Rest(Event):
+    def __init__(self, duration=None):
+        super().__init__(None, duration)
+
+    def __str__(self):
+        return f'r {self.duration}'
 
 
 def major_scale(root: str):
