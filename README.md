@@ -123,6 +123,11 @@ parts. Both map every duration to a MusicXML note type, dots and tuplet ratio, a
 common multiple of all the denominators so each duration lands on a whole tick. `1/5` becomes a quarter with a 5:4 time
 modification, `1/12` an eighth with 3:2.
 
+Beaming follows the meter: the primary beam spans the beat — a dotted quarter in `6/8`, a half in `2/2` — while
+secondary beams subdivide the beat. Rests and lone notes break a run, chords carry the beam on their lowest note, and
+beams never cross a barline. In meters whose beat is shorter than a quarter (`5/8`, `7/8`, `5/16`) every note is its own
+beat, so eighths are left flagged instead of beamed.
+
 Rendering limits for now: an event that does not fit the remaining bar starts the next bar instead of being tied across it,
 and tuplets carry a time modification but no bracket. One time signature covers the whole score — meter changes mid-piece,
 pickup bars and key changes are not modelled yet.

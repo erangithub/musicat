@@ -278,12 +278,46 @@ def _duration_type(duration):
     return nearest, 0, None, None
 
 
+def _beams(measure, beat_ticks, group_ticks):
+    """Beam XML for each note of one measure, in order. `measure` is a list of
+    (duration_ticks, note_type) pairs, note_type None for rests; returns one
+    string per note to insert before its closing </note> tag."""
+    ranks = {'eighth': 1, '16th': 2, '32nd': 3, '64th': 4, '128th': 5}
+    items = []
+    start = 0
+    for ticks, name in measure:
+        items.append([start, ranks.get(name, 0)])
+        start += ticks
+    xml = [''] * len(items)
+    for level in range(1, max((rank for _, rank in items), default=0) + 1):
+        slot = group_ticks if level == 1 else beat_ticks // 2 ** (level - 2)
+        i = 0
+        while i < len(items):
+            if items[i][1] < level:
+                i += 1
+                continue
+            j = i
+            while j < len(items) and items[j][1] >= level \
+                    and items[j][0] // slot == items[i][0] // slot:
+                j += 1
+            if j - i > 1:
+                for k in range(i, j):
+                    kind = 'begin' if k == i else 'end' if k == j - 1 else 'continue'
+                    xml[k] += f'<beam number="{level}">{kind}</beam>'
+                i = j
+            else:
+                i += 1
+    return xml
+
+
 def show_score(score: Score):
     units = lcm(4, score.beat_type,
                 *[event.duration.denominator
                   for part in score.parts for event in part.sequence])
     divisions = units // 4
     bar_ticks = int(Fraction(score.beats, score.beat_type) * units)
+    beat_ticks = units // score.beat_type
+    group_ticks = beat_ticks * (3 if score.beats % 3 == 0 and score.beat_type >= 8 else 1)
     accidental = {None: ('', 0), 'bb': ('flat-flat', -2), 'b': ('flat', -1),
                   '#': ('sharp', 1), '##': ('double-sharp', 2)}
 
@@ -317,13 +351,19 @@ def show_score(score: Score):
             else:
                 raise SyntaxError(f'Illegal event {type(event).__name__}')
             if notes and filled + ticks > bar_ticks:
-                measures.append(''.join(notes))
+                beams = _beams([(t, kind) for _, t, kind in notes], beat_ticks, group_ticks)
+                measures.append(''.join(
+                    note.replace('</note>', beam + '</note>', 1) if beam else note
+                    for (note, _, _), beam in zip(notes, beams)))
                 notes = []
                 filled = 0
-            notes.append(body)
+            notes.append((body, ticks, None if isinstance(event, Rest) else name))
             filled += ticks
         if notes:
-            measures.append(''.join(notes))
+            beams = _beams([(t, kind) for _, t, kind in notes], beat_ticks, group_ticks)
+            measures.append(''.join(
+                note.replace('</note>', beam + '</note>', 1) if beam else note
+                for (note, _, _), beam in zip(notes, beams)))
 
         attributes = (f'<attributes><divisions>{divisions}</divisions>'
                       '<key><fifths>0</fifths></key>'
