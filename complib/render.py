@@ -1,1 +1,1 @@
-from .render_verovio import (show, show_seq, show_score, _duration_type, _beams)
+from .render_verovio import (show, show_score, _duration_type, _beams)

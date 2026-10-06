@@ -153,5 +153,3 @@ def show_score(score: Score):
          f'{"".join(parts)}</score-partwise>')
 
 
-def show_seq(sequence: Sequence, time='4/4'):
-    show_score(Score([Part(sequence)], time))

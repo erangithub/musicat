@@ -20,6 +20,10 @@ class Part:
     def __repr__(self):
         return f"Part('{self.name}', {len(self.sequence)} events)"
 
+    def show(self, time='4/4'):
+        from . import render_verovio
+        render_verovio.show_score(Score([self], time))
+
 
 class Score:
     def __init__(self, parts, time='4/4'):
@@ -44,3 +48,7 @@ class Score:
 
     def __repr__(self):
         return f'Score({", ".join(repr(part) for part in self.parts)}, {self.time!r})'
+
+    def show(self):
+        from . import render_verovio
+        render_verovio.show_score(self)
