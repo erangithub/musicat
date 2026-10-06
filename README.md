@@ -1,7 +1,7 @@
 # complib
 
-A programmable library for composing music. Draft stage: pitches, scales, durations, events, and notation rendering via
-Verovio.
+A programmable library for composing music. Draft stage: pitches, scales, durations, events, scores with parts, and
+notation rendering via Verovio.
 
 ## Setup
 
@@ -101,12 +101,31 @@ combine(to_pitches('<c e g c c>'), to_rhythm('1/2'))[0]   # Chord('c4 e4 g4 c5 c
 Single notes are left alone, so a melody may descend: `to_pitches('c e g c')` stays four pitch classes, and `c3` is how
 you ask for the lower c. A chord that would need an octave above 7 raises `SyntaxError`.
 
-`show_seq()` maps every duration to a MusicXML note type, dots and tuplet ratio, and derives `divisions` from the least
-common multiple of the denominators so each duration lands on a whole tick. `1/5` becomes a quarter with a 5:4 time
+A `Score` is a list of `Part`s plus a time signature written as a string, in the same text-first style as the rest of the
+library. A `Part` is one line of music — in MusicXML terms a *staff*, not an instrument, so a piano is two parts:
+
+```python
+score = Score([Part(melody, 'Flute'), Part(accomp, 'Piano RH')], '6/8')
+str(score)     # Flute, Piano RH in 6/8
+```
+
+Bar length comes from the meter as `Fraction(beats, beat_type)`, so 6/8 is six eighths to a bar and 2/2 is four quarters:
+
+```python
+show_seq(combine(to_pitches('c d e f g a b c'), to_rhythm('1/4')), '3/4')   # bars of 3, 3, 2
+```
+
+Parts are independent timelines that share one `divisions`, so they line up measure for measure. A part that plays nothing
+while another part plays writes `<>`; there is no automatic alignment or note spreading between parts.
+
+`show_seq(sequence, time='4/4')` is shorthand for a single-part score, and `show_score(score)` renders any number of
+parts. Both map every duration to a MusicXML note type, dots and tuplet ratio, and derive `divisions` from the least
+common multiple of all the denominators so each duration lands on a whole tick. `1/5` becomes a quarter with a 5:4 time
 modification, `1/12` an eighth with 3:2.
 
-Rendering limits for now: the time signature is a hardcoded 4/4, an event that does not fit the remaining bar starts the
-next bar instead of being tied across it, and tuplets carry a time modification but no bracket.
+Rendering limits for now: an event that does not fit the remaining bar starts the next bar instead of being tied across it,
+and tuplets carry a time modification but no bracket. One time signature covers the whole score — meter changes mid-piece,
+pickup bars and key changes are not modelled yet.
 
 Pitches and events compare by value and are hashable:
 
@@ -136,7 +155,10 @@ Pitch('c#4') == Pitch('db4')   # False — both are MIDI 61, but the spelling di
 | `to_rhythm(text)` | Parses whitespace-separated durations into a list of `Fraction`. |
 | `combine(pitches, rhythm)` | Zips groups of pitches with durations into a list of events, cycling the rhythm as needed. Accepts the output of `to_pitches`, or hand-written lists. |
 | `show(musicxml=None)` | Renders MusicXML through Verovio and displays it inline in Jupyter. Defaults to `mock/probe.musicxml`. |
-| `show_seq(sequence)` | Renders a sequence of events as MusicXML in memory and displays it. |
+| `Part(sequence, name='Music')` | One line of music: a sequence of events, and the name the score shows for it. |
+| `Score(parts, time='4/4')` | A list of `Part`s and the time signature, written as `'6/8'`, `'3/4'`, `'5/4'`. |
+| `show_seq(sequence, time='4/4')` | Renders a single sequence as MusicXML in memory and displays it. Shorthand for a one-part score. |
+| `show_score(score)` | Renders every part of a score as MusicXML in memory and displays it. |
 
 ## Conventions
 

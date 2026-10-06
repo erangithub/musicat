@@ -125,6 +125,48 @@ Duration = Fraction
 Rhythm = list[Duration]
 
 
+class Part:
+    def __init__(self, sequence, name='Music'):
+        if not sequence:
+            raise SyntaxError('Empty part')
+        for event in sequence:
+            if not isinstance(event, Event):
+                raise SyntaxError(f'Illegal event {event!r}')
+        self.sequence = sequence
+        self.name = name
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return f"Part('{self.name}', {len(self.sequence)} events)"
+
+
+class Score:
+    def __init__(self, parts, time='4/4'):
+        if not parts:
+            raise SyntaxError('Empty score')
+        for part in parts:
+            if not isinstance(part, Part):
+                raise SyntaxError(f'Illegal part {part!r}')
+        match = re.fullmatch(r'(\d+)/(\d+)', time)
+        if not match:
+            raise SyntaxError(f'Illegal time signature "{time}"')
+        beats, beat_type = int(match.group(1)), int(match.group(2))
+        if not beats or beat_type not in (1, 2, 4, 8, 16, 32, 64):
+            raise SyntaxError(f'Illegal time signature "{time}"')
+        self.parts = parts
+        self.time = time
+        self.beats = beats
+        self.beat_type = beat_type
+
+    def __str__(self):
+        return f'{", ".join(str(part) for part in self.parts)} in {self.time}'
+
+    def __repr__(self):
+        return f'Score({", ".join(repr(part) for part in self.parts)}, {self.time!r})'
+
+
 def major_scale(root: str):
     root_pitch = Pitch(root)
 
@@ -236,60 +278,74 @@ def _duration_type(duration):
     return nearest, 0, None, None
 
 
-def show_seq(sequence: Sequence):
-    if not sequence:
-        raise SyntaxError('Empty sequence')
-    units = lcm(4, *[event.duration.denominator for event in sequence])
+def show_score(score: Score):
+    units = lcm(4, score.beat_type,
+                *[event.duration.denominator
+                  for part in score.parts for event in part.sequence])
     divisions = units // 4
+    bar_ticks = int(Fraction(score.beats, score.beat_type) * units)
     accidental = {None: ('', 0), 'bb': ('flat-flat', -2), 'b': ('flat', -1),
                   '#': ('sharp', 1), '##': ('double-sharp', 2)}
 
-    measures = []
-    notes = []
-    filled = 0
-    for event in sequence:
-        name, dots, actual, normal = _duration_type(event.duration)
-        dots_xml = '<dot/>' * dots
-        tuplet_xml = (f'<time-modification><actual-notes>{actual}</actual-notes>'
-                      f'<normal-notes>{normal}</normal-notes></time-modification>'
-                      if actual else '')
-        ticks = int(event.duration * units)
-        if isinstance(event, Rest):
-            body = (f'<note><rest/><duration>{ticks}</duration><voice>1</voice>'
-                    f'<type>{name}</type>{dots_xml}{tuplet_xml}</note>')
-        elif isinstance(event, (Note, Chord)):
-            body = ''
-            for i, pitch in enumerate(event.pitches):
-                symbol, alter = accidental[pitch.accidental]
-                acc = f'<accidental>{symbol}</accidental>' if symbol else ''
-                alt = f'<alter>{alter}</alter>' if alter else ''
-                octave = 4 if pitch.octave is None else pitch.octave
-                body += ('<note><chord/>' if i else '<note>') + (
-                    f'<pitch><step>{pitch.root.upper()}</step>{alt}'
-                    f'<octave>{octave}</octave></pitch>'
-                    f'<duration>{ticks}</duration><voice>1</voice>'
-                    f'<type>{name}</type>{dots_xml}{acc}{tuplet_xml}</note>')
-        else:
-            raise SyntaxError(f'Illegal event {type(event).__name__}')
-        if notes and filled + ticks > units:
+    parts = []
+    for part in score.parts:
+        measures = []
+        notes = []
+        filled = 0
+        for event in part.sequence:
+            name, dots, actual, normal = _duration_type(event.duration)
+            dots_xml = '<dot/>' * dots
+            tuplet_xml = (f'<time-modification><actual-notes>{actual}</actual-notes>'
+                          f'<normal-notes>{normal}</normal-notes></time-modification>'
+                          if actual else '')
+            ticks = int(event.duration * units)
+            if isinstance(event, Rest):
+                body = (f'<note><rest/><duration>{ticks}</duration><voice>1</voice>'
+                        f'<type>{name}</type>{dots_xml}{tuplet_xml}</note>')
+            elif isinstance(event, (Note, Chord)):
+                body = ''
+                for i, pitch in enumerate(event.pitches):
+                    symbol, alter = accidental[pitch.accidental]
+                    acc = f'<accidental>{symbol}</accidental>' if symbol else ''
+                    alt = f'<alter>{alter}</alter>' if alter else ''
+                    octave = 4 if pitch.octave is None else pitch.octave
+                    body += ('<note><chord/>' if i else '<note>') + (
+                        f'<pitch><step>{pitch.root.upper()}</step>{alt}'
+                        f'<octave>{octave}</octave></pitch>'
+                        f'<duration>{ticks}</duration><voice>1</voice>'
+                        f'<type>{name}</type>{dots_xml}{acc}{tuplet_xml}</note>')
+            else:
+                raise SyntaxError(f'Illegal event {type(event).__name__}')
+            if notes and filled + ticks > bar_ticks:
+                measures.append(''.join(notes))
+                notes = []
+                filled = 0
+            notes.append(body)
+            filled += ticks
+        if notes:
             measures.append(''.join(notes))
-            notes = []
-            filled = 0
-        notes.append(body)
-        filled += ticks
-    if notes:
-        measures.append(''.join(notes))
 
-    attributes = (f'<attributes><divisions>{divisions}</divisions>'
-                  '<key><fifths>0</fifths></key>'
-                  '<time><beats>4</beats><beat-type>4</beat-type></time>'
-                  '<clef><sign>G</sign><line>2</line></clef></attributes>')
-    body = ''.join(f'<measure number="{i}">{attributes if i == 1 else ""}{m}</measure>'
-                   for i, m in enumerate(measures, 1))
+        attributes = (f'<attributes><divisions>{divisions}</divisions>'
+                      '<key><fifths>0</fifths></key>'
+                      f'<time><beats>{score.beats}</beats>'
+                      f'<beat-type>{score.beat_type}</beat-type></time>'
+                      '<clef><sign>G</sign><line>2</line></clef></attributes>')
+        body = ''.join(f'<measure number="{i}">{attributes if i == 1 else ""}{m}</measure>'
+                       for i, m in enumerate(measures, 1))
+        parts.append(f'<part id="P{len(parts) + 1}">{body}</part>')
+
+    part_list = ''.join(f'<score-part id="P{i}"><part-name>{part.name}</part-name>'
+                        f'</score-part>'
+                        for i, part in enumerate(score.parts, 1))
     show('<?xml version="1.0" encoding="UTF-8"?>'
          '<score-partwise version="4.0"><part-list>'
-         '<score-part id="P1"><part-name>Music</part-name></score-part></part-list>'
-         f'<part id="P1">{body}</part></score-partwise>')
+         f'{part_list}</part-list>'
+         f'{"".join(parts)}</score-partwise>')
+
+
+def show_seq(sequence: Sequence, time='4/4'):
+    show_score(Score([Part(sequence)], time))
+
 
 if __name__ == "__main__":
     print('Welcome to complib')
