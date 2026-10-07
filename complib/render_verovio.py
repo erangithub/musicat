@@ -88,8 +88,7 @@ def show_score(score: Score):
     bar_ticks = int(Fraction(score.beats, score.beat_type) * units)
     beat_ticks = units // score.beat_type
     group_ticks = beat_ticks * (3 if score.beats % 3 == 0 and score.beat_type >= 8 else 1)
-    accidental = {None: ('', 0), 'bb': ('flat-flat', -2), 'b': ('flat', -1),
-                  '#': ('sharp', 1), '##': ('double-sharp', 2)}
+    acc_map = {'': '', 'bb': 'flat-flat', 'b': 'flat', '#': 'sharp', '##': 'double-sharp'}
 
     parts = []
     for part in score.parts:
@@ -109,12 +108,13 @@ def show_score(score: Score):
             elif isinstance(event, (Note, Chord)):
                 body = ''
                 for i, pitch in enumerate(event.pitches):
-                    symbol, alter = accidental[pitch.accidental]
+                    symbol = acc_map[pitch.accidental()]
+                    alter = abs(pitch.acc)
                     acc = f'<accidental>{symbol}</accidental>' if symbol else ''
                     alt = f'<alter>{alter}</alter>' if alter else ''
-                    octave = 4 if pitch.octave is None else pitch.octave
+                    octave = pitch.octave()
                     body += ('<note><chord/>' if i else '<note>') + (
-                        f'<pitch><step>{pitch.root.upper()}</step>{alt}'
+                        f'<pitch><step>{pitch.root().upper()}</step>{alt}'
                         f'<octave>{octave}</octave></pitch>'
                         f'<duration>{ticks}</duration><voice>1</voice>'
                         f'<type>{name}</type>{dots_xml}{acc}{tuplet_xml}</note>')

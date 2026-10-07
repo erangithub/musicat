@@ -4,61 +4,73 @@ from .errors import SyntaxError
 
 LETTERS = 'cdefgab'
 NATURAL_PITCH = (0, 2, 4, 5, 7, 9, 11)
-ACCIDENTAL_OFFSET = {None: 0, 'bb': -2, 'b': -1, '#': 1, '##': 2}
-ACCIDENTAL_NAME = {-2: 'bb', -1: 'b', 0: '', 1: '#', 2: '##'}
-
 
 class Pitch:
-    def __init__(self, name: str):
-        match = re.fullmatch('([a-gA-G])(bb|b|#|##)?(-1|[0-7])?', name)
-        if not match:
-            raise SyntaxError(f'Illegal pitch name "{name}"')
-        self.name = name
-        self.root = match.group(1)
-        self.accidental = match.group(2)
-        self.octave = int(match.group(3)) if match.group(3) else None
+    def __init__(self, name: str = ""):
+        if not name:
+            self.idx = 0
+            self.acc = 0
+        else:
+            match = re.fullmatch('([a-gA-G])(b*|#*)?(-?[0-9]+)?', name)
+            if not match:
+                raise SyntaxError(f'Illegal pitch name "{name}"')
+            self.idx = LETTERS.index(match.group(1).lower())
+            accidental_name = match.group(2)
+            if not accidental_name:
+                self.acc = 0
+            elif accidental_name[0] == '#':
+                self.acc = len(accidental_name)
+            else:
+                self.acc = -len(accidental_name)
+            octave = int(match.group(3)) if match.group(3) else 0
+            self.idx += octave * 7
 
     def midipitch(self):
-        idx = LETTERS.index(self.root.lower())
-        base = NATURAL_PITCH[idx]
-        if self.octave is not None:
-            base += 12 * (self.octave+1)
-        base += ACCIDENTAL_OFFSET[self.accidental]
+        return NATURAL_PITCH[self.idx % 7] + 12 * ((self.octave())+1) + self.acc
 
-        return base
+    def _normpitch(self):
+        return self.midipitch() - 12
+
+    def octave(self):
+        return self.idx // 7
+
+    def root(self):
+        return LETTERS[self.idx % 7]
+
+    def accidental(self):
+        if self.acc > 0:
+            return "#" * self.acc 
+        if self.acc < 0:
+            return "b" * -self.acc
+        return "" 
 
     def __eq__(self, other):
         if not isinstance(other, Pitch):
             return NotImplemented
-        return (self.root.lower(), self.accidental, self.octave) == \
-               (other.root.lower(), other.accidental, other.octave)
+        return (self.idx, self.acc) == (other.idx, other.acc)
 
     def __hash__(self):
-        return hash((self.root.lower(), self.accidental, self.octave))
+        return hash((self.idx, self.acc))
 
     def __str__(self):
-        return self.name
-
+        return f'{self.root()}{self.accidental()}{self.octave()}'
     def __repr__(self):
-        return f"Pitch('{self.name}')"
+        return f"Pitch('{self.__str__()}')"
 
+    def __add__(self, other):
+        result = Pitch()
+        result.idx = self.idx + other.idx
+        result.acc = self._normpitch() + other._normpitch() - result._normpitch()
+        return result
 
-def major_scale(root: str):
-    root_pitch = Pitch(root)
+    def __sub__(self, other):
+        return self + (-other)
 
-    start = LETTERS.index(root_pitch.root.lower())
-    root_pc = (NATURAL_PITCH[start] + ACCIDENTAL_OFFSET[root_pitch.accidental]) % 12
-
-    pitches = []
-    for degree in range(7):
-        idx = (start + degree) % 7
-        letter = LETTERS[idx]
-        pitch_pc = (root_pc + NATURAL_PITCH[degree]) % 12
-        delta = (pitch_pc - NATURAL_PITCH[idx]) % 12
-        if delta > 6:
-            delta -= 12
-        pitches.append(Pitch(letter + ACCIDENTAL_NAME[delta]))
-    return pitches
+    def __neg__(self):
+        result = Pitch()
+        result.idx = -self.idx
+        result.acc = -self._normpitch() - result._normpitch()
+        return result
 
 def to_pitches(text):
     groups = []
@@ -74,3 +86,9 @@ def to_pitches(text):
     if position != len(text):
         raise SyntaxError(f'Illegal chord near "{text[position:].strip()}"')
     return groups
+
+def major_scale(root: str):
+    scale = to_pitches('c d e f g a b')
+    root_pitch = Pitch(root)
+    return list(map(lambda p : root_pitch + p[0], scale))
+
