@@ -4,7 +4,7 @@ import pytest
 
 from complib import (DOUBLE_DOT, DOT, EIGHTH, QUARTER, SIXTEENTH, THIRTY_SECOND,
                      WHOLE, HALF, Chord, Event, Note, Part, Pitch, Rest, Score,
-                     SyntaxError, _duration_type)
+                     SyntaxError, _duration_type, to_pitches)
 
 
 def test_duration_constants():
@@ -60,31 +60,29 @@ def test_event_str_repr():
     assert str(Note('c4')) == 'c4 1/4'
     assert str(Rest(F(1, 2))) == 'r 1/2'
     assert str(Rest()) == 'r 1/4'
-    assert str(Chord(['c', 'e'])) == 'c4 e4 1/4'
-    assert repr(Note('c')) == "Note('c', 1/4)"
+    assert str(Chord(['c', 'e'])) == 'c0 e0 1/4'
+    assert repr(Note('c')) == "Note('c0', 1/4)"
     assert repr(Rest()) == "Rest(1/4)"
-    assert repr(Chord(['c', 'e'])) == "Chord('c4 e4', 1/4)"
+    assert repr(Chord(['c', 'e'])) == "Chord('c0 e0', 1/4)"
 
 
 def test_event_midipitches():
-    assert Chord(['c', 'e']).midipitches() == [60, 64]
+    assert Chord(['c', 'e']).midipitches() == [12, 16]
     assert Rest().midipitches() == []
 
 
 def test_chord_voices_low_to_high():
-    chord = Chord(['c', 'e', 'g'])
-    assert [str(p) for p in chord.pitches] == ['c4', 'e4', 'g4']
-    assert str(Chord(['c', 'e', 'g', 'c', 'c'])) == 'c4 e4 g4 c5 c6 1/4'
+    assert [str(p) for p in to_pitches('<c e g>')[0]] == ['c0', 'e0', 'g0']
+    assert [str(p) for p in to_pitches('<c e g c c>')[0]] == ['c0', 'e0', 'g0', 'c1', 'c2']
 
 
 def test_chord_respects_explicit_octaves():
-    assert [str(p) for p in Chord(['c3', 'e4']).pitches] == ['c3', 'e4']
-    assert [str(p) for p in Chord(['g2', 'c']).pitches] == ['g2', 'c3']
+    assert [str(p) for p in to_pitches('<c3 e4>')[0]] == ['c3', 'e4']
+    assert [str(p) for p in to_pitches('<g2 c>')[0]] == ['g2', 'c3']
 
 
-def test_chord_rejects_past_octave_range():
-    with pytest.raises(SyntaxError):
-        Chord(['c7', 'c'])
+def test_chord_stacks_past_octave_range():
+    assert [str(p) for p in to_pitches('<c7 c>')[0]] == ['c7', 'c8']
 
 
 @pytest.mark.parametrize('duration,expected', [

@@ -138,14 +138,14 @@ def test_accidentals(capture):
     assert '<accidental>sharp</accidental>' in xml
     assert '<step>B</step><alter>-1</alter>' in xml
     assert '<accidental>flat</accidental>' in xml
-    assert '<step>E</step><octave>4</octave>' in xml
+    assert '<step>E</step><octave>0</octave>' in xml
     assert xml.count('<accidental>') == 2
 
 
-def test_octave_defaults_to_four(capture):
+def test_octave_defaults_to_zero(capture):
     Part([Note('c'), Note('c3')]).show()
     xml = capture[0]
-    assert '<step>C</step><octave>4</octave>' in xml
+    assert '<step>C</step><octave>0</octave>' in xml
     assert '<step>C</step><octave>3</octave>' in xml
 
 

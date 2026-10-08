@@ -6,7 +6,7 @@ LETTERS = 'cdefgab'
 NATURAL_PITCH = (0, 2, 4, 5, 7, 9, 11)
 
 class Pitch:
-    def __init__(self, name: str = ""):
+    def __init__(self, name: str = "", min_octave: int = 0):
         if not name:
             self.idx = 0
             self.acc = 0
@@ -22,7 +22,7 @@ class Pitch:
                 self.acc = len(accidental_name)
             else:
                 self.acc = -len(accidental_name)
-            octave = int(match.group(3)) if match.group(3) else 0
+            octave = int(match.group(3)) if match.group(3) else min_octave
             self.idx += octave * 7
 
     def midipitch(self):
@@ -74,15 +74,36 @@ class Pitch:
 
 def to_pitches(text):
     groups = []
+    min_octave = 0
     position = 0
     for match in re.finditer(r'<([^<>]*)>|[^<>]+', text):
         if match.start() != position:
             raise SyntaxError(f'Illegal chord near "{text[position:].strip()}"')
         position = match.end()
         if match.group(1) is None:
-            groups.extend([Pitch(pitch)] for pitch in match.group().split())
+            for name in match.group().split():
+                pitch = Pitch(name, min_octave)
+                explicit = re.search(r'-?[0-9]+$', name)
+                if explicit:
+                    min_octave = int(explicit.group())
+                groups.append([pitch])
         else:
-            groups.append([Pitch(pitch) for pitch in match.group(1).split()])
+            names = match.group(1).split()
+            if not names:
+                groups.append([])
+                continue
+            root = Pitch(names[0], min_octave)
+            chord = [root]
+            running = root.midipitch()
+            for name in names[1:]:
+                pitch = Pitch(name, min_octave)
+                if not re.search(r'-?[0-9]+$', name):
+                    while pitch.midipitch() <= running:
+                        pitch = Pitch(f'{pitch.root()}{pitch.accidental()}{pitch.octave() + 1}')
+                chord.append(pitch)
+                running = pitch.midipitch()
+            groups.append(chord)
+            min_octave = root.octave()
     if position != len(text):
         raise SyntaxError(f'Illegal chord near "{text[position:].strip()}"')
     return groups

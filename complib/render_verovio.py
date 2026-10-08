@@ -109,7 +109,7 @@ def show_score(score: Score):
                 body = ''
                 for i, pitch in enumerate(event.pitches):
                     symbol = acc_map[pitch.accidental()]
-                    alter = abs(pitch.acc)
+                    alter = pitch.acc
                     acc = f'<accidental>{symbol}</accidental>' if symbol else ''
                     alt = f'<alter>{alter}</alter>' if alter else ''
                     octave = pitch.octave()

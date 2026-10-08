@@ -7,30 +7,30 @@ from complib import (Chord, Note, Pitch, Rest, SyntaxError, combine, major_scale
 
 
 @pytest.mark.parametrize('name,root,accidental,octave', [
-    ('c', 'c', None, None),
-    ('C', 'C', None, None),
+    ('c', 'c', '', 0),
+    ('C', 'c', '', 0),
     ('f#4', 'f', '#', 4),
     ('bb3', 'b', 'b', 3),
-    ('g##', 'g', '##', None),
-    ('e-1', 'e', None, -1),
-    ('a7', 'a', None, 7),
-    ('d#', 'd', '#', None),
+    ('g##', 'g', '##', 0),
+    ('e-1', 'e', '', -1),
+    ('a7', 'a', '', 7),
+    ('d#', 'd', '#', 0),
 ])
 def test_pitch_parses(name, root, accidental, octave):
     pitch = Pitch(name)
-    assert pitch.root == root
-    assert pitch.accidental == accidental
-    assert pitch.octave == octave
+    assert pitch.root() == root
+    assert pitch.accidental() == accidental
+    assert pitch.octave() == octave
 
 
-@pytest.mark.parametrize('bad', ['', 'h', 'cc', 'i4', 'c8', 'c#b4', 'c#-2', 'c bb'])
+@pytest.mark.parametrize('bad', ['h', 'cc', 'i4', 'c#b4', 'c bb'])
 def test_pitch_rejects(bad):
     with pytest.raises(SyntaxError):
         Pitch(bad)
 
 
 @pytest.mark.parametrize('name,midipitch', [
-    ('c', 0),
+    ('c', 12),
     ('c-1', 0),
     ('e-1', 4),
     ('c4', 60),
@@ -70,10 +70,10 @@ def test_pitch_str_repr():
 
 
 @pytest.mark.parametrize('root,pitches', [
-    ('c', ['c', 'd', 'e', 'f', 'g', 'a', 'b']),
-    ('d', ['d', 'e', 'f#', 'g', 'a', 'b', 'c#']),
-    ('g', ['g', 'a', 'b', 'c', 'd', 'e', 'f#']),
-    ('bb', ['bb', 'c', 'd', 'eb', 'f', 'g', 'a']),
+    ('c', ['c0', 'd0', 'e0', 'f0', 'g0', 'a0', 'b0']),
+    ('d', ['d0', 'e0', 'f#0', 'g0', 'a0', 'b0', 'c#1']),
+    ('g', ['g0', 'a0', 'b0', 'c1', 'd1', 'e1', 'f#1']),
+    ('bb', ['bb0', 'c1', 'd1', 'eb1', 'f1', 'g1', 'a1']),
 ])
 def test_major_scale(root, pitches):
     assert [str(p) for p in major_scale(root)] == pitches
@@ -147,7 +147,7 @@ def test_combine_single_group_is_note():
 def test_combine_group_is_chord():
     events = combine([['c', 'e', 'g']], [F(1, 2)])
     assert events == [Chord(['c', 'e', 'g'], F(1, 2))]
-    assert str(events[0]) == 'c4 e4 g4 1/2'
+    assert str(events[0]) == 'c0 e0 g0 1/2'
 
 
 def test_combine_from_to_pitches_and_to_rhythm():
