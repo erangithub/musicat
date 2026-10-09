@@ -6,3 +6,4 @@ from .events import Chord, Event, Note, Rest, Sequence, combine
 from .score import Part, Score
 from .render import show, show_score, _duration_type
 from .scale import Scale, major_scale
+from .degrees import to_degrees

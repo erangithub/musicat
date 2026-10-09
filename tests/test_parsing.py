@@ -3,7 +3,7 @@ from fractions import Fraction as F
 import pytest
 
 from complib import (Chord, Note, Pitch, Rest, SyntaxError, combine, major_scale,
-                     to_pitches, to_rhythm)
+                     to_degrees, to_pitches, to_rhythm)
 
 
 @pytest.mark.parametrize('name,root,accidental,octave', [
@@ -102,6 +102,51 @@ def test_to_pitches(text, groups):
 def test_to_pitches_rejects(bad):
     with pytest.raises(SyntaxError):
         to_pitches(bad)
+
+
+@pytest.mark.parametrize('text,groups', [
+    ('', []),
+    ('1', [[(1, 0)]]),
+    ('1 5', [[(1, 0)], [(5, 0)]]),
+    ('<1 5>', [[(1, 0), (5, 0)]]),
+    ('3b 8', [[(3, -1)], [(8, 0)]]),
+    ('4#', [[(4, 1)]]),
+    ('5bb 7##', [[(5, -2)], [(7, 2)]]),
+    ('1 5 <3b 8> 4#', [[(1, 0)], [(5, 0)], [(3, -1), (8, 0)], [(4, 1)]]),
+    ('<>', [[]]),
+])
+def test_to_degrees(text, groups):
+    assert to_degrees(text) == groups
+
+
+@pytest.mark.parametrize('bad', ['0', '1 0', 'x', '1x', 'b', '#', '-1', '1.5', '<1 2', '1 2>', '<>x'])
+def test_to_degrees_rejects(bad):
+    with pytest.raises(SyntaxError):
+        to_degrees(bad)
+
+
+@pytest.mark.parametrize('root,text,groups', [
+    ('c', '1 5 <3b 8> 4#', [['c0'], ['g0'], ['eb0', 'c1'], ['f#0']]),
+    ('d', '1 5 <3b 8> 4#', [['d0'], ['a0'], ['f0', 'd1'], ['g#0']]),
+    ('bb', '1 5 <3b 8> 4#', [['bb0'], ['f1'], ['db1', 'bb1'], ['e1']]),
+])
+def test_scale_to_pitches(root, text, groups):
+    result = major_scale(root).to_pitches(to_degrees(text))
+    assert [[str(pitch) for pitch in group] for group in result] == groups
+
+
+def test_scale_degrees_beyond_octave():
+    scale = major_scale('c')
+    assert str(scale[8]) == 'c1'
+    assert str(scale[-1]) == 'a-1'
+    assert [str(pitch) for pitch in scale[4:20]] == [
+        'f0', 'g0', 'a0', 'b0', 'c1', 'd1', 'e1', 'f1', 'g1', 'a1', 'b1', 'c2', 'd2', 'e2', 'f2', 'g2']
+
+
+def test_scale_str_repr():
+    scale = major_scale('d')
+    assert str(scale) == 'd0 e0 f#0 g0 a0 b0 c#1'
+    assert repr(scale) == "Scale('d0', 'c0 d0 e0 f0 g0 a0 b0')"
 
 
 @pytest.mark.parametrize('text,durations', [

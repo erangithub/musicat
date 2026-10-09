@@ -16,6 +16,9 @@ class Scale:
         result.acc += acc_offset 
         return result
 
+    def to_pitches(self, degrees):
+        return [[self.at(number, acc) for number, acc in group] for group in degrees]
+
     def __len__(self):
         return self._len
 
