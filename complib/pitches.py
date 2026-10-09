@@ -44,7 +44,7 @@ class Pitch:
             return "b" * -self.acc
         return "" 
 
-    def __eq__(self, other):
+    def __eq__(self, other: Pitch):
         if not isinstance(other, Pitch):
             return NotImplemented
         return (self.idx, self.acc) == (other.idx, other.acc)
@@ -57,7 +57,7 @@ class Pitch:
     def __repr__(self):
         return f"Pitch('{self.__str__()}')"
 
-    def __add__(self, other):
+    def __add__(self, other: Pitch):
         result = Pitch()
         result.idx = self.idx + other.idx
         result.acc = self._normpitch() + other._normpitch() - result._normpitch()
@@ -107,9 +107,3 @@ def to_pitches(text):
     if position != len(text):
         raise SyntaxError(f'Illegal chord near "{text[position:].strip()}"')
     return groups
-
-def major_scale(root: str):
-    scale = to_pitches('c d e f g a b')
-    root_pitch = Pitch(root)
-    return list(map(lambda p : root_pitch + p[0], scale))
-
