@@ -1,11 +1,4 @@
-from enum import Enum
-
-from .errors import SyntaxError
 from .pitches import Pitch, to_pitches
-
-LETTERS = 'cdefgab'
-
-_octave = Pitch('c1')
 
 def _flatten(xss):
     return [x for xs in xss for x in xs]
