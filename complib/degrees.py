@@ -2,6 +2,8 @@ import re
 
 from .errors import SyntaxError
 
+Degree = tuple[int, int]
+
 def parse_degrees(text):
     groups = []
     position = 0
@@ -31,3 +33,16 @@ def parse_degrees(text):
     if position != len(text):
         raise SyntaxError(f'Illegal chord near "{text[position:].strip()}"')
     return groups
+
+def stack_degrees(pattern1 : list[Degree], pattern2 : list[Degree]):
+    result = []
+    for c1 in pattern1:
+        for c2 in pattern2:
+            res_chord = []
+            for d2, a2 in c2:
+                for d1, a1 in c1:
+                    res_chord.append((d1+d2-1, a1+a2))
+            result.append(res_chord)
+
+    return result
+

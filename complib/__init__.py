@@ -6,4 +6,4 @@ from .idea import Idea, pitches, rhythm, degrees
 from .score import Part, Score
 from .render import show, show_score, _duration_type
 from .scale import Scale, major_scale
-from .degrees import parse_degrees
+from .degrees import parse_degrees, Degree, stack_degrees
