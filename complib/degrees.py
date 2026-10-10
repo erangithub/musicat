@@ -18,8 +18,8 @@ def parse_degrees(text):
         for names in units:
             group = []
             for name in names:
-                degree = re.fullmatch(r'(\d+)(b*|#*)?', name)
-                if not degree or int(degree.group(1)) < 1:
+                degree = re.fullmatch(r'(-?\d+)(b*|#*)?', name)
+                if not degree:
                     raise SyntaxError(f'Illegal degree "{name}"')
                 accidental = degree.group(2)
                 if not accidental:
@@ -36,8 +36,9 @@ def parse_degrees(text):
 
 def stack_degrees(pattern1 : list[Degree], pattern2 : list[Degree]):
     result = []
-    for c1 in pattern1:
-        for c2 in pattern2:
+
+    for c2 in pattern2:
+        for c1 in pattern1:
             res_chord = []
             for d2, a2 in c2:
                 for d1, a1 in c1:
