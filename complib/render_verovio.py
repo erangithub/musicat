@@ -2,7 +2,6 @@ from fractions import Fraction
 from math import lcm
 
 from .errors import SyntaxError
-from .events import Chord, Event, Note, Rest, Sequence
 from .rhythm import EIGHTH, HALF, QUARTER, SIXTEENTH, THIRTY_SECOND, WHOLE
 from .score import Part, Score
 
@@ -81,9 +80,21 @@ def _beams(measure, beat_ticks, group_ticks):
 
 
 def show_score(score: Score):
+    parts_events = []
+    for part in score.parts:
+        idea = part.idea
+        if (idea.pitches is None and idea.rhythm is None):
+            raise(RuntimeError("Can't display degree based idea"))
+        rhythm = idea.rhythm or [WHOLE]
+        pitches = idea.pitches or [[]] * len(rhythm)
+        count = len(idea)
+        events = []
+        for i in range(count):
+            events.append((pitches[i], rhythm[i % len(rhythm)]))
+        parts_events.append(events)
     units = lcm(4, score.beat_type,
-                *[event.duration.denominator
-                  for part in score.parts for event in part.sequence])
+                *[duration.denominator for events in parts_events
+                  for _, duration in events])
     divisions = units // 4
     bar_ticks = int(Fraction(score.beats, score.beat_type) * units)
     beat_ticks = units // score.beat_type
@@ -91,23 +102,23 @@ def show_score(score: Score):
     acc_map = {'': '', 'bb': 'flat-flat', 'b': 'flat', '#': 'sharp', '##': 'double-sharp'}
 
     parts = []
-    for part in score.parts:
+    for part, events in zip(score.parts, parts_events):
         measures = []
         notes = []
         filled = 0
-        for event in part.sequence:
-            name, dots, actual, normal = _duration_type(event.duration)
+        for group, duration in events:
+            name, dots, actual, normal = _duration_type(duration)
             dots_xml = '<dot/>' * dots
             tuplet_xml = (f'<time-modification><actual-notes>{actual}</actual-notes>'
                           f'<normal-notes>{normal}</normal-notes></time-modification>'
                           if actual else '')
-            ticks = int(event.duration * units)
-            if isinstance(event, Rest):
+            ticks = int(duration * units)
+            if not group:
                 body = (f'<note><rest/><duration>{ticks}</duration><voice>1</voice>'
                         f'<type>{name}</type>{dots_xml}{tuplet_xml}</note>')
-            elif isinstance(event, (Note, Chord)):
+            else:
                 body = ''
-                for i, pitch in enumerate(event.pitches):
+                for i, pitch in enumerate(group):
                     symbol = acc_map[pitch.accidental()]
                     alter = pitch.acc
                     acc = f'<accidental>{symbol}</accidental>' if symbol else ''
@@ -118,8 +129,6 @@ def show_score(score: Score):
                         f'<octave>{octave}</octave></pitch>'
                         f'<duration>{ticks}</duration><voice>1</voice>'
                         f'<type>{name}</type>{dots_xml}{acc}{tuplet_xml}</note>')
-            else:
-                raise SyntaxError(f'Illegal event {type(event).__name__}')
             if notes and filled + ticks > bar_ticks:
                 beams = _beams([(t, kind) for _, t, kind in notes], beat_ticks, group_ticks)
                 measures.append(''.join(
@@ -127,7 +136,7 @@ def show_score(score: Score):
                     for (note, _, _), beam in zip(notes, beams)))
                 notes = []
                 filled = 0
-            notes.append((body, ticks, None if isinstance(event, Rest) else name))
+            notes.append((body, ticks, None if not group else name))
             filled += ticks
         if notes:
             beams = _beams([(t, kind) for _, t, kind in notes], beat_ticks, group_ticks)
@@ -151,5 +160,3 @@ def show_score(score: Score):
          '<score-partwise version="4.0"><part-list>'
          f'{part_list}</part-list>'
          f'{"".join(parts)}</score-partwise>')
-
-

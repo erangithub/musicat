@@ -1,11 +1,11 @@
-from .pitches import Pitch, to_pitches
+from .pitches import Pitch, parse_pitches
 
 def _flatten(xss):
     return [x for xs in xss for x in xs]
 
 class Scale:
     def __init__(self, root_str : str, pitches_str: str):
-        self._pitches = _flatten(to_pitches(pitches_str))
+        self._pitches = _flatten(parse_pitches(pitches_str))
         self._len = len(self._pitches)
         self.root = Pitch(root_str)
 
@@ -15,9 +15,6 @@ class Scale:
         result = self.root + self._pitches[idx-1] + Pitch('c', octave)
         result.acc += acc_offset 
         return result
-
-    def to_pitches(self, degrees):
-        return [[self.at(number, acc) for number, acc in group] for group in degrees]
 
     def __len__(self):
         return self._len

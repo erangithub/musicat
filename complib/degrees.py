@@ -2,8 +2,7 @@ import re
 
 from .errors import SyntaxError
 
-
-def to_degrees(text):
+def parse_degrees(text):
     groups = []
     position = 0
     for match in re.finditer(r'<([^<>]*)>|[^<>]+', text):

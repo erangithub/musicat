@@ -72,7 +72,7 @@ class Pitch:
         result.acc = -self._normpitch() - result._normpitch()
         return result
 
-def to_pitches(text):
+def parse_pitches(text):
     groups = []
     min_octave = 0
     position = 0

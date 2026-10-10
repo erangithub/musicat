@@ -1,24 +1,22 @@
 import re
 
 from .errors import SyntaxError
-from .events import Event
 
 
 class Part:
-    def __init__(self, sequence, name='Music'):
-        if not sequence:
-            raise SyntaxError('Empty part')
-        for event in sequence:
-            if not isinstance(event, Event):
-                raise SyntaxError(f'Illegal event {event!r}')
-        self.sequence = sequence
+    def __init__(self, idea, name='Music'):
+        if idea.degrees is not None:
+            raise SyntaxError('Resolve degrees to pitches before making a Part')
+        self.idea = idea
         self.name = name
 
     def __str__(self):
         return self.name
 
     def __repr__(self):
-        return f"Part('{self.name}', {len(self.sequence)} events)"
+        pitches = self.idea.pitches
+        count = len(pitches if pitches is not None else self.idea.rhythm)
+        return f"Part('{self.name}', {count} events)"
 
     def show(self, time='4/4'):
         from . import render_verovio

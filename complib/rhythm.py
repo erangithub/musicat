@@ -15,8 +15,7 @@ DOUBLE_DOT = Fraction(7, 4)
 Duration = Fraction
 Rhythm = list[Duration]
 
-
-def to_rhythm(text):
+def parse_rhythm(text : str) -> Rhythm:
     tokens = text.split()
     durations = []
     for token in tokens:
@@ -32,6 +31,6 @@ def to_rhythm(text):
             denominator = int(denominator)
             if not denominator:
                 raise SyntaxError(f'Illegal duration "{token}"')
-            duration = Fraction(int(numerator or 1), denominator)
+            duration = Duration(int(numerator or 1), denominator)
         durations.append(duration * (2 - Fraction(1, 2 ** len(dots))))
     return durations
