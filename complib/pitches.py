@@ -102,6 +102,8 @@ def parse_pitches(text):
                         pitch = Pitch(f'{pitch.root()}{pitch.accidental()}{pitch.octave() + 1}')
                 chord.append(pitch)
                 running = pitch.midipitch()
+            if chord == []:
+                raise SyntaxError(f'Empty chord near "{text[position:].strip()}"')
             groups.append(chord)
             min_octave = root.octave()
     if position != len(text):

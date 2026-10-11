@@ -29,6 +29,8 @@ def parse_degrees(text):
                 else:
                     acc = -len(accidental)
                 group.append((int(degree.group(1)), acc))
+            if group == []:
+                raise SyntaxError(f'Empty chord near "{text[position:].strip()}"')
             groups.append(group)
     if position != len(text):
         raise SyntaxError(f'Illegal chord near "{text[position:].strip()}"')

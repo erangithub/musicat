@@ -85,13 +85,7 @@ def show_score(score: Score):
         idea = part.idea
         if (idea.pitches is None and idea.rhythm is None):
             raise(RuntimeError("Can't display degree based idea"))
-        rhythm = idea.rhythm or [WHOLE]
-        pitches = idea.pitches or [[]] * len(rhythm)
-        count = len(idea)
-        events = []
-        for i in range(count):
-            events.append((pitches[i], rhythm[i % len(rhythm)]))
-        parts_events.append(events)
+        parts_events.append(idea.events())
     units = lcm(4, score.beat_type,
                 *[duration.denominator for events in parts_events
                   for _, duration in events])

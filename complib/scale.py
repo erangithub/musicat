@@ -4,7 +4,7 @@ def _flatten(xss):
     return [x for xs in xss for x in xs]
 
 class Scale:
-    def __init__(self, root_str : str, pitches_str: str):
+    def __init__(self, pitches_str: str, root_str : str = "c0"):
         self._pitches = _flatten(parse_pitches(pitches_str))
         self._len = len(self._pitches)
         self.root = Pitch(root_str)
@@ -38,4 +38,4 @@ class Scale:
         return f"Scale('{self.root}', '{orig_pitches}')"
 
 def major_scale(root_str):
-    return Scale(root_str, 'c d e f g a b')
+    return Scale('c d e f g a b', root_str)

@@ -1,7 +1,7 @@
 from .errors import SyntaxError
 from .pitches import parse_pitches
 from .degrees import parse_degrees, stack_degrees
-from .rhythm import parse_rhythm
+from .rhythm import parse_rhythm, REST_MARKER
 
 class Idea:
     def __init__(self, pitches=None, degrees=None, rhythm=None):
@@ -67,12 +67,33 @@ class Idea:
             return len(self.rhythm)
         else:
             return 0
- 
+
     def show(self, time='4/4'):
         from . import Part
         Part(self).show(time)
 
-           
+    def events(self):
+        rhythm = self.rhythm or [WHOLE]
+        pitches = self.pitches
+        result = []
+        j = 0
+        i = 0
+        len_r = len(rhythm)
+        watchdog = 10000
+        while i < len(pitches):
+            if (watchdog < 0):
+                raise(RuntimeError('Too many events'))
+            if rhythm[j] == REST_MARKER:
+                result.append(([], rhythm[j+1]))
+                j = (j+2) % len_r
+                watchdog = watchdog-1
+                continue
+            else:
+                result.append((pitches[i], rhythm[j]))
+                j = (j+1) % len_r
+                i = i+1
+                watchdog = watchdog-1
+        return result
 
 def pitches(text):
     return Idea(pitches = parse_pitches(text))
