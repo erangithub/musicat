@@ -80,7 +80,10 @@ class Idea:
         return Idea(content=self.content.against(palette, strict), rhythm=self.rhythm)
 
     def __rshift__(self, palette):
-        return self.against(palette)
+        return self.as_pitches(palette)
+
+    def __lshift__(self, palette):
+        return self.as_degrees(palette)
 
     def as_pitches(self, palette):
         if not isinstance(self.content, Degrees):

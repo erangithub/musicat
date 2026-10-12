@@ -16,21 +16,21 @@ DOUBLE_DOT = Fraction(7, 4)
 Duration = Fraction
 Rhythm = list[Duration | str]
 
-REST_MARKER = '_'
+REST_MARKER = 'r'
 LOOP_MARKER = 'L'
 
 def parse_rhythm(text : str) -> Rhythm:
     tokens = text.split()
     durations = []
     for token in tokens:
-        match = re.fullmatch(r'(_)?(\d*)(?:/(\d+))?(\.*)', token)
+        match = re.fullmatch(r'(r)?(?:(\d)+\/)?(\d+)(\.*)', token)
         if not match:
             raise SyntaxError(f'Illegal duration "{token}"')
         rest, numerator, denominator, dots = match.group(1), match.group(2), match.group(3), match.group(4)
-        if not numerator and denominator is None:
+        if numerator is None and denominator is None:
             raise SyntaxError(f'Illegal duration "{token}"')
-        if denominator is None:
-            duration = Fraction(int(numerator))
+        if numerator is None:
+            duration = Fraction(1, int(denominator))
         else:
             denominator = int(denominator)
             if not denominator:
