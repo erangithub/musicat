@@ -3,6 +3,8 @@ from fractions import Fraction as F
 
 from compose import (Idea, Pitch, Palette, Pitches, Degrees, Part, SyntaxError,
                      degrees, major_scale, minor_scale, pitches, rhythm)
+from compose.rhythm import (LOOP_MARKER, REST_MARKER, parse_rhythm,
+                            rhythm_from_steps, rhythm_steps)
 
 SIXTH_DIM = Palette('c d e f g ab a b')
 PALETTES = {
@@ -20,16 +22,68 @@ def names(idea):
     return [[str(p) for p in group] for group in idea.pitches]
 
 
+def ev(idea):
+    """events() as [(note-or-'rest', duration)], first note of each group."""
+    return [('rest' if not g else str(g[0]), d) for g, d in idea.events()]
+
+
+def durations(idea):
+    return [d for _, d in idea.events()]
+
+
+# ------------------------------------------------------------ rhythm syntax
+
+def test_rhythm_parse_basics():
+    assert parse_rhythm('4 8') == [F(1, 4), F(1, 8)]
+    assert parse_rhythm('1 2') == [F(1), F(1, 2)]
+    assert parse_rhythm('r4') == [REST_MARKER, F(1, 4)]
+    assert parse_rhythm('3/4') == [F(3, 4)]
+    assert parse_rhythm('12/8') == [F(3, 2)]            # multi-digit numerator
+    assert parse_rhythm('4.') == [F(3, 8)]
+    assert parse_rhythm('4..') == [F(7, 16)]
+    assert parse_rhythm('r4.') == [REST_MARKER, F(3, 8)]
+
+
+def test_rhythm_loop_marker_parse():
+    assert parse_rhythm('4 |: 8') == [F(1, 4), LOOP_MARKER, F(1, 8)]
+    assert parse_rhythm('|: 4 8') == [LOOP_MARKER, F(1, 4), F(1, 8)]
+
+
+@pytest.mark.parametrize('text', ['0', '1/0', '0/4', 'x', 'r', '/4', '4|:8', '4 |:'])
+def test_rhythm_illegal(text):
+    with pytest.raises(SyntaxError):
+        parse_rhythm(text)
+
+
+def test_rhythm_loop_marker_errors():
+    with pytest.raises(SyntaxError, match='Only one loop marker'):
+        parse_rhythm('4 |: 8 |: 16')
+    with pytest.raises(SyntaxError, match='runs to the end'):
+        parse_rhythm('4 8 :|')
+    with pytest.raises(SyntaxError, match='Nothing to loop'):
+        parse_rhythm('4 |:')
+
+
+def test_rhythm_steps_roundtrip():
+    r = parse_rhythm('4 r8 |: 16 2')
+    steps, loop = rhythm_steps(r)
+    assert steps == [(False, F(1, 4)), (True, F(1, 8)), (False, F(1, 16)), (False, F(1, 2))]
+    assert loop == 2
+    assert rhythm_from_steps(steps, loop) == r
+    # the default loop (everything) is written without a marker
+    assert rhythm_from_steps(steps, 0) == parse_rhythm('4 r8 16 2')
+
+
 # ---------------------------------------------------------------- two slots
 
 def test_slots_and_compat_properties():
-    i = pitches('c d') + rhythm('/4')
+    i = pitches('c d') * rhythm('4')
     assert isinstance(i.content, Pitches)
     assert i.pitches == i.content.groups and i.degrees is None
     d = degrees('1 2')
     assert isinstance(d.content, Degrees)
     assert d.degrees == [[(1, 0)], [(2, 0)]] and d.pitches is None
-    assert rhythm('/4').content is None
+    assert rhythm('4').content is None
 
 
 def test_cannot_hold_both_by_construction():
@@ -37,45 +91,235 @@ def test_cannot_hold_both_by_construction():
         Idea(content=[[Pitch('c')]])          # raw lists are not content
 
 
-def test_add_fills_each_slot_once():
-    assert (degrees('1') + rhythm('/4')).rhythm == [F(1, 4)]
-    with pytest.raises(SyntaxError, match='share degrees'):
-        degrees('1') + degrees('2')
-    with pytest.raises(SyntaxError, match='share pitches'):
-        pitches('c') + pitches('d')
-    with pytest.raises(SyntaxError, match='share rhythm'):
-        rhythm('/4') + rhythm('/8')
-    with pytest.raises(SyntaxError, match='both pitches and degrees'):
-        pitches('c') + degrees('1')
-    with pytest.raises(SyntaxError):
-        pitches('c') + 3
-
-
 def test_equality_and_repr():
     assert degrees('1 2') == degrees('1 2')
     assert degrees('1 2') != degrees('1 3')
     assert degrees('1') != pitches('c')
-    assert repr(degrees('1') + rhythm('/4')) == \
+    assert repr(degrees('1') * rhythm('4')) == \
         "Idea(degrees=[[(1, 0)]], rhythm=[Fraction(1, 4)])"
-    assert len(degrees('1 2 3')) == 3 and len(rhythm('/4 /4')) == 2 and len(Idea()) == 0
+    assert len(degrees('1 2 3')) == 3 and len(Idea()) == 0
+    assert Idea(rhythm=[]) == Idea()                       # empty rhythm is no rhythm
 
 
-def test_stack_errors():
+# ------------------------------------------------- * : layering and stacking
+
+def test_layering_is_symmetric_and_order_free():
+    for build in (lambda: rhythm('8') * degrees('1 2'),
+                  lambda: degrees('1 2') * rhythm('8')):
+        i = build()
+        assert i.degrees == [[(1, 0)], [(2, 0)]] and i.rhythm == [F(1, 8)]
+    i = pitches('c d') * rhythm('8')
+    assert i.pitches is not None and i.rhythm == [F(1, 8)]
+
+
+def test_stacking_keeps_whichever_rhythm_exists():
+    r = (degrees('1 2') * rhythm('4')) * degrees('1 3')
+    assert r.rhythm == [F(1, 4)]
+    assert r.degrees == [[(1, 0)], [(2, 0)], [(3, 0)], [(4, 0)]]
+    chain = rhythm('4') * degrees('1 2') * degrees('1 3')
+    assert chain == r
+
+
+def test_layer_and_stack_errors():
     with pytest.raises(SyntaxError, match='share rhythm'):
-        (degrees('1') + rhythm('/4')) * (degrees('1') + rhythm('/8'))
+        (degrees('1') * rhythm('4')) * (degrees('1') * rhythm('8'))
+    with pytest.raises(SyntaxError, match='share rhythm'):
+        rhythm('4') * rhythm('8')
     with pytest.raises(SyntaxError, match="don't have degrees"):
         pitches('c') * degrees('1')
     with pytest.raises(SyntaxError, match="don't have degrees"):
-        degrees('1') * rhythm('/4')
+        pitches('c') * pitches('d')
 
 
-def test_stack_keeps_whichever_rhythm_exists():
-    r = (degrees('1 2') + rhythm('/4')) * degrees('1 3')
-    assert r.rhythm == [F(1, 4)]
-    assert r.degrees == [[(1, 0)], [(2, 0)], [(3, 0)], [(4, 0)]]
+def test_user_arpeggio_example():
+    idea = rhythm('8') * degrees('1 2 3') * degrees('0 1 2 3') >> Palette('d4 f a')
+    assert isinstance(idea.content, Pitches)
+    assert idea.rhythm == [F(1, 8)]
+    assert names(idea) == [['a3'], ['d4'], ['f4'], ['d4'], ['f4'], ['a4'],
+                           ['f4'], ['a4'], ['d5'], ['a4'], ['d5'], ['f5']]
 
 
-# ----------------------------------------------------------- >> / against
+# ---------------------------------------------------------- * : repeating
+
+def test_repeat_without_rhythm_joins_content():
+    assert (pitches('c d') * 2).pitches == pitches('c d c d').pitches
+    assert (3 * pitches('c')).pitches == pitches('c c c').pitches
+    assert (pitches('c d') * 2).rhythm is None
+    assert (pitches('c d') * 1) == pitches('c d')
+
+
+def test_repeat_with_rhythm_restarts_the_rhythm_each_time():
+    r = (pitches('c d') * rhythm('4 8')) * 2
+    assert r.rhythm == [F(1, 4), F(1, 8), LOOP_MARKER, F(1, 4), F(1, 8)]
+    assert durations(r) == [F(1, 4), F(1, 8), F(1, 4), F(1, 8)]
+
+
+def test_rhythm_attached_after_repeat_cycles_across_everything():
+    # same notes, same rhythm, different order of operations (isorhythm vs repetition)
+    each_pass = pitches('c d e') * rhythm('4 8') * 2
+    across = pitches('c d e') * 2 * rhythm('4 8')
+    assert durations(each_pass) == [F(1, 4), F(1, 8), F(1, 4)] * 2
+    assert durations(across) == [F(1, 4), F(1, 8)] * 3
+
+
+def test_repeat_errors():
+    for bad in (0, -1, 2.5, F(1, 2), True, 'x'):
+        with pytest.raises(SyntaxError):
+            pitches('c') * bad
+    with pytest.raises(SyntaxError):
+        2.5 * pitches('c')
+
+
+def test_repeat_resolves_like_anything_else():
+    assert names(degrees('1 2') * 2 >> major_scale('c')) == [['c4'], ['d4'], ['c4'], ['d4']]
+
+
+# ------------------------------------------------ + : concatenation (rows)
+
+def test_concat_neither_has_rhythm_invents_none():
+    r = pitches('c d') + pitches('e')
+    assert r.pitches == pitches('c d e').pitches and r.rhythm is None
+    assert (degrees('1 2') + degrees('3')).degrees == [[(1, 0)], [(2, 0)], [(3, 0)]]
+
+
+def test_concat_both_have_rhythm_keeps_b_loop():
+    a = pitches('c d') * rhythm('4 8')
+    b = pitches('e f g') * rhythm('2 |: 16')
+    r = a + b
+    assert r.rhythm == [F(1, 4), F(1, 8), F(1, 2), LOOP_MARKER, F(1, 16)]
+    assert ev(r) == [('c4', F(1, 4)), ('d4', F(1, 8)), ('e4', F(1, 2)),
+                     ('f4', F(1, 16)), ('g4', F(1, 16))]
+
+
+def test_concat_both_default_loop_b_restarts_its_own_pattern():
+    a = pitches('c d') * rhythm('4 8')
+    b = pitches('e f g') * rhythm('2 16')
+    r = a + b
+    assert r.rhythm == [F(1, 4), F(1, 8), LOOP_MARKER, F(1, 2), F(1, 16)]
+    assert durations(r) == [F(1, 4), F(1, 8), F(1, 2), F(1, 16), F(1, 2)]
+
+
+def test_concat_a_without_rhythm_takes_first_duration_of_b_even_a_rest():
+    b = pitches('e') * rhythm('r4 8')
+    r = pitches('c d') + b
+    assert ev(r) == [('c4', F(1, 4)), ('d4', F(1, 4)), ('rest', F(1, 4)),
+                     ('e4', F(1, 8)), ('rest', F(1, 4))]
+    r2 = pitches('c d') + pitches('e') * rhythm('8 4')
+    assert durations(r2)[:2] == [F(1, 8), F(1, 8)]
+
+
+def test_concat_b_without_rhythm_continues_a():
+    a = pitches('c d e') * rhythm('4 8')
+    r = a + pitches('f g')
+    assert r.rhythm == a.rhythm
+    assert durations(r) == [F(1, 4), F(1, 8), F(1, 4), F(1, 8), F(1, 4)]
+
+
+def test_concat_keeps_trailing_rests_of_a():
+    a = pitches('c d') * rhythm('4 4 r2')
+    b = pitches('e') * rhythm('8')
+    r = a + b
+    assert ev(r) == [('c4', F(1, 4)), ('d4', F(1, 4)), ('rest', F(1, 2)), ('e4', F(1, 8))]
+    # and when b has no rhythm, a's pattern simply continues through its rest
+    assert ev(a + pitches('e')) == [('c4', F(1, 4)), ('d4', F(1, 4)), ('rest', F(1, 2)),
+                                    ('e4', F(1, 4))]
+
+
+def test_concat_rhythm_only():
+    r = rhythm('4 8') + rhythm('2')
+    assert r.rhythm == [F(1, 4), F(1, 8), LOOP_MARKER, F(1, 2)]
+    assert r.content is None
+
+
+def test_concat_empty_idea_is_identity():
+    a = pitches('c d') * rhythm('4')
+    assert Idea() + a == a and a + Idea() == a
+
+
+def test_concat_is_associative_when_every_part_has_rhythm():
+    a = pitches('c') * rhythm('4')
+    b = pitches('d e') * rhythm('8 16')
+    c = pitches('f') * rhythm('2')
+    assert (a + b) + c == a + (b + c)
+    assert ev((a + b) + c) == ev(a + (b + c))
+
+
+def test_concat_errors():
+    with pytest.raises(SyntaxError, match='pitches with degrees'):
+        pitches('c') + degrees('1')
+    with pytest.raises(SyntaxError, match=r'use \* to layer'):
+        rhythm('4') + degrees('1')
+    with pytest.raises(SyntaxError, match=r'use \* to layer'):
+        degrees('1') + rhythm('4')
+    with pytest.raises(SyntaxError):
+        pitches('c') + 3
+
+
+def test_concat_before_resolving():
+    phrase = degrees('1 2') * rhythm('4') + degrees('5') * rhythm('2') >> major_scale('c')
+    assert ev(phrase) == [('c4', F(1, 4)), ('d4', F(1, 4)), ('g4', F(1, 2))]
+
+
+# -------------------------------------------------------- events / looping
+
+def test_events_plain_pitches_default_whole_notes():
+    assert durations(pitches('c d')) == [F(1), F(1)]
+
+
+def test_events_whole_rhythm_loops_by_default():
+    assert durations(pitches('c d e') * rhythm('4 8')) == [F(1, 4), F(1, 8), F(1, 4)]
+    assert durations(pitches('c d e f') * rhythm('4 8')) == [F(1, 4), F(1, 8)] * 2
+
+
+def test_events_loop_marker():
+    assert durations(pitches('c d e f') * rhythm('4 |: 8')) == [F(1, 4), F(1, 8), F(1, 8), F(1, 8)]
+    assert durations(pitches('c d e f') * rhythm('|: 4 8')) == \
+        durations(pitches('c d e f') * rhythm('4 8'))
+    assert durations(pitches('c d e f') * rhythm('4 8 |: 16')) == \
+        [F(1, 4), F(1, 8), F(1, 16), F(1, 16)]
+
+
+def test_events_with_rests_and_trailing_rest():
+    assert ev(pitches('c d e') * rhythm('4 r4')) == [
+        ('c4', F(1, 4)), ('rest', F(1, 4)), ('d4', F(1, 4)), ('rest', F(1, 4)),
+        ('e4', F(1, 4)), ('rest', F(1, 4))]                  # trailing rest kept
+    assert ev(pitches('c d') * rhythm('4 4 r2')) == [
+        ('c4', F(1, 4)), ('d4', F(1, 4)), ('rest', F(1, 2))]
+    assert ev(pitches('c d e') * rhythm('4 4 r2')) == [      # nothing trails e
+        ('c4', F(1, 4)), ('d4', F(1, 4)), ('rest', F(1, 2)), ('e4', F(1, 4))]
+
+
+def test_events_leading_rest():
+    # the loop returns to the leading rest after c, and a rest that directly
+    # follows the last note is kept
+    assert ev(pitches('c') * rhythm('r4 4')) == [
+        ('rest', F(1, 4)), ('c4', F(1, 4)), ('rest', F(1, 4))]
+    assert ev(pitches('c') * rhythm('r4 |: 4')) == [('rest', F(1, 4)), ('c4', F(1, 4))]
+
+
+def test_events_rhythm_only_plays_every_step_once():
+    assert ev(rhythm('4 4 r4')) == [('rest', F(1, 4))] * 3
+    assert durations(rhythm('4 |: 8')) == [F(1, 4), F(1, 8)]
+
+
+@pytest.mark.parametrize('text', ['r4', '4 |: r2', 'r4 |: r8'])
+def test_events_loop_without_sounding_step_raises_not_hangs(text):
+    with pytest.raises(SyntaxError, match='no sounding notes'):
+        (pitches('c d') * rhythm(text)).events()
+
+
+def test_events_degrees_must_be_resolved():
+    with pytest.raises(SyntaxError, match='Resolve degrees'):
+        (degrees('1 2') * rhythm('4')).events()
+
+
+def test_part_still_rejects_degrees():
+    with pytest.raises(SyntaxError):
+        Part(degrees('1 2'))
+    Part(degrees('1 2') >> major_scale('c'))
+
+
+# --------------------------------------------------------- >> and << (palette)
 
 def test_degrees_to_pitches():
     assert names(degrees('1 2 3') >> Palette('d4 f a')) == [['d4'], ['f4'], ['a4']]
@@ -83,37 +327,28 @@ def test_degrees_to_pitches():
     assert names(degrees('0 -1') >> Palette('d4 f a')) == [['a3'], ['f3']]
 
 
-def test_user_arpeggio_example():
-    idea = rhythm('/8') + degrees('1 2 3') * degrees('0 1 2 3') >> Palette('d4 f a')
-    assert isinstance(idea.content, Pitches)
-    assert idea.rhythm == [F(1, 8)]
-    assert names(idea) == [['a3'], ['d4'], ['f4'], ['d4'], ['f4'], ['a4'],
-                           ['f4'], ['a4'], ['d5'], ['a4'], ['d5'], ['f5']]
-
-
 def test_rhythm_survives_both_directions():
-    r = rhythm('/4 _/4 /2')
-    there = (degrees('1 2') + r) >> major_scale('c')
-    back = there >> major_scale('c')
+    r = rhythm('4 r4 |: 2')
+    there = (degrees('1 2') * r) >> major_scale('c')
+    back = there << major_scale('c')
     assert there.rhythm == back.rhythm == r.rhythm
     assert back.degrees == [[(1, 0)], [(2, 0)]]
 
 
 def test_pitches_to_degrees_chromatic_and_spelling():
-    got = pitches('c4 db4 c#4 d4') >> major_scale('c')
+    got = pitches('c4 db4 c#4 d4') << major_scale('c')
     assert got.degrees == [[(1, 0)], [(2, -1)], [(1, 1)], [(2, 0)]]
-    # enharmonic spellings stay distinct
-    assert got.degrees[1] != got.degrees[2]
+    assert got.degrees[1] != got.degrees[2]          # enharmonics stay distinct
 
 
 def test_pitches_to_degrees_chords_and_octaves():
-    got = pitches('<c4 e g> <c5 e g>') >> major_scale('c')
+    got = pitches('<c4 e g> <c5 e g>') << major_scale('c')
     assert got.degrees == [[(1, 0), (3, 0), (5, 0)], [(8, 0), (10, 0), (12, 0)]]
 
 
 def test_strict():
     c = major_scale('c')
-    assert (pitches('c d e') >> c) == pitches('c d e').as_degrees(c, strict=True)
+    assert (pitches('c d e') << c) == pitches('c d e').as_degrees(c, strict=True)
     with pytest.raises(SyntaxError, match='not in the palette'):
         pitches('c#4').as_degrees(c, strict=True)
     with pytest.raises(SyntaxError, match='not in the palette'):
@@ -124,18 +359,17 @@ def test_no_letter_match_falls_back_to_nearest_sound():
     p = PALETTES['pentatonic']          # c d e g a: no f, no b
     for text in ('f4', 'b4', 'f#4', 'bb3'):
         idea = pitches(text)
-        back = (idea >> p) >> p
+        back = (idea << p) >> p
         assert back.pitches[0][0].midipitch() == idea.pitches[0][0].midipitch()
 
 
 @pytest.mark.parametrize('name', PALETTES)
 def test_pitches_roundtrip_is_exact_when_letters_match(name):
     p = PALETTES[name]
-    # every pitch in a wide range, with accidentals, whose letter is in the palette
     for degree in range(-25, 40):
         for acc in (-1, 0, 1):
             original = Idea(Pitches([[p.at(degree, acc)]]))
-            assert (original >> p) >> p == original, (name, degree, acc)
+            assert (original << p) >> p == original, (name, degree, acc)
 
 
 @pytest.mark.parametrize('name', PALETTES)
@@ -144,7 +378,7 @@ def test_degree_roundtrip_sounds_the_same(name):
     for degree in range(-25, 40):
         for acc in (-1, 0, 1):
             idea = Idea(Degrees([[(degree, acc)]]))
-            again = ((idea >> p) >> p) >> p
+            again = ((idea >> p) << p) >> p
             assert again == idea >> p, (name, degree, acc)
 
 
@@ -154,30 +388,26 @@ def test_degree_roundtrip_exact_for_distinct_letters(name):
     for degree in range(-25, 40):
         for acc in (-1, 0, 1):
             idea = Idea(Degrees([[(degree, acc)]]))
-            assert (idea >> p) >> p == idea, (name, degree, acc)
+            assert (idea >> p) << p == idea, (name, degree, acc)
 
 
-def test_reharmonize():
-    melody = pitches('c e g')
-    out = melody >> major_scale('c') >> Palette('d4 f a')
+def test_reharmonize_pipeline():
+    out = pitches('c e g') << major_scale('c') >> Palette('d4 f a')
     assert names(out) == [['d4'], ['a4'], ['f5']]
 
 
-def test_rshift_errors():
+def test_each_operator_accepts_only_its_own_direction():
+    c = major_scale('c')
+    with pytest.raises(SyntaxError, match='without degrees'):
+        pitches('c') >> c
+    with pytest.raises(SyntaxError, match='without pitches'):
+        degrees('1') << c
     with pytest.raises(SyntaxError, match='expected a Palette'):
         degrees('1') >> 3
-    with pytest.raises(SyntaxError, match='nothing to resolve'):
-        rhythm('/4') >> major_scale('c')
     with pytest.raises(SyntaxError, match='without degrees'):
-        pitches('c').as_pitches(major_scale('c'))
-    with pytest.raises(SyntaxError, match='without pitches'):
-        degrees('1').as_degrees(major_scale('c'))
-
-
-def test_empty_chord_passes_through():
-    both = pitches('c <> d') >> major_scale('c')
-    assert both.degrees == [[(1, 0)], [], [(2, 0)]]
-    assert (both >> major_scale('c')).pitches[1] == []
+        rhythm('4') >> c
+    with pytest.raises(SyntaxError, match='nothing to resolve'):
+        rhythm('4').against(c)
 
 
 def test_shearing_examples():
@@ -188,39 +418,15 @@ def test_shearing_examples():
     assert names(down)[0] == ['c4', 'a3', 'g3', 'e3']             # melody on top
 
 
-# ------------------------------------------------------------------ events
-
-def test_events_plain_pitches_default_whole_notes():
-    ev = pitches('c d').events()
-    assert [d for _, d in ev] == [F(1), F(1)]
-
-
-def test_events_rhythm_cycles_over_pitches():
-    ev = (pitches('c d e') + rhythm('/4 /8')).events()
-    assert [d for _, d in ev] == [F(1, 4), F(1, 8), F(1, 4)]
-
-
-def test_events_with_rests():
-    ev = (pitches('c d e') + rhythm('/4 _/4')).events()
-    assert [(bool(g), d) for g, d in ev] == [
-        (True, F(1, 4)), (False, F(1, 4)), (True, F(1, 4)),
-        (False, F(1, 4)), (True, F(1, 4))]
-
-
-def test_events_rhythm_only_ending_in_rest_terminates():
-    ev = rhythm('/4 /4 _/4').events()
-    assert [(bool(g), d) for g, d in ev] == [(False, F(1, 4))] * 3
-
-
-def test_events_all_rest_rhythm_with_pitches_raises_not_hangs():
-    with pytest.raises(SyntaxError, match='no sounding notes'):
-        (pitches('c d') + rhythm('_/4')).events()
-
-
-def test_part_still_rejects_degrees():
-    with pytest.raises(SyntaxError):
-        Part(degrees('1 2'))
-    Part(degrees('1 2') >> major_scale('c'))
+def test_harmonize_example():
+    def harmonize(melody):
+        bebop = Palette('c d e f g ab a b')
+        return (pitches(melody) << bebop) * degrees('<1 -1 -3 -5 -7>') >> bebop
+    h = harmonize('c d e g f ab g')
+    assert names(h)[0] == ['c4', 'a3', 'g3', 'e3', 'c3']          # C6, melody on top
+    assert names(h)[1] == ['d4', 'b3', 'ab3', 'f3', 'd3']         # D dim7
+    assert len(h) == 7
+    assert len(harmonize('c d') * rhythm('4')) == 2
 
 
 # ----------------------------------------------------------------- palette
