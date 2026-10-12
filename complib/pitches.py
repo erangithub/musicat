@@ -74,7 +74,7 @@ class Pitch:
 
 def parse_pitches(text):
     groups = []
-    min_octave = 0
+    min_octave = 4
     position = 0
     for match in re.finditer(r'<([^<>]*)>|[^<>]+', text):
         if match.start() != position:

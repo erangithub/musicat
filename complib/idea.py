@@ -80,20 +80,21 @@ class Idea:
         j = 0
         i = 0
         len_r = len(rhythm)
-        watchdog = 10000
-        while i < len(pitches):
-            if (watchdog < 0):
-                raise(RuntimeError('Too many events'))
+        len_p = len(pitches) if pitches else 0
+        while i < (len_p or len_r):
             if rhythm[j] == REST_MARKER:
                 result.append(([], rhythm[j+1]))
                 j = (j+2) % len_r
-                watchdog = watchdog-1
                 continue
             else:
-                result.append((pitches[i], rhythm[j]))
+                if len_p:
+                    result.append((pitches[i], rhythm[j]))
+                    i = i+1
+                else:
+                    result.append(([], rhythm[j]))
                 j = (j+1) % len_r
-                i = i+1
-                watchdog = watchdog-1
+            if j == 0 and len_p == 0:
+                break
         return result
 
 def pitches(text):
