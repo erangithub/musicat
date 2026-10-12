@@ -5,5 +5,5 @@ from .rhythm import (DOUBLE_DOT, DOT, EIGHTH, QUARTER, SIXTEENTH, THIRTY_SECOND,
 from .idea import Idea, pitches, rhythm, degrees
 from .score import Part, Score
 from .render import show, show_score, _duration_type
-from .scale import Scale, major_scale
+from .palette import Palette, major_scale
 from .degrees import parse_degrees, Degree, stack_degrees

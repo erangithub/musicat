@@ -1,7 +1,7 @@
 from .errors import SyntaxError
 from .pitches import parse_pitches
 from .degrees import parse_degrees, stack_degrees
-from .rhythm import parse_rhythm, REST_MARKER
+from .rhythm import parse_rhythm, REST_MARKER, WHOLE
 
 class Idea:
     def __init__(self, pitches=None, degrees=None, rhythm=None):
@@ -38,8 +38,9 @@ class Idea:
     def __mul__(self, other):
         if not isinstance(other, Idea):
             raise SyntaxError(f'Illegal operand {other!r}')
-            if getattr(self, 'rhythm') is not None and getattr(other, 'rhythm') is not None:
-                raise SyntaxError(f'Cannot combine ideas that share rhythm')
+
+        if getattr(self, 'rhythm') is not None and getattr(other, 'rhythm') is not None:
+            raise SyntaxError(f'Cannot combine ideas that share rhythm')
 
         if getattr(self, 'degrees') is None:
             raise SyntaxError(f"Cannot stack ideas that don't have degrees")
@@ -51,10 +52,10 @@ class Idea:
             degrees=stack_degrees(self.degrees, other.degrees),
             rhythm=self.rhythm if self.rhythm is not None else other.rhythm)
 
-    def as_pitches(self, scale):
+    def as_pitches(self, palette):
         if self.degrees is None:
             raise SyntaxError('An idea without degrees has no pitches to resolve')
-        pitches = [[scale.at(number, acc) for number, acc in group]
+        pitches = [[palette.at(number, acc) for number, acc in group]
                    for group in self.degrees]
         return Idea(pitches=pitches, rhythm=self.rhythm)
 

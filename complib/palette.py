@@ -3,7 +3,7 @@ from .pitches import Pitch, parse_pitches
 def _flatten(xss):
     return [x for xs in xss for x in xs]
 
-class Scale:
+class Palette:
     def __init__(self, pitches_str: str, root_str : str = "c0"):
         self._pitches = _flatten(parse_pitches(pitches_str))
         self._len = len(self._pitches)
@@ -35,7 +35,7 @@ class Scale:
 
     def __repr__(self):
         orig_pitches = ' '.join(str(pitch) for pitch in self._pitches)
-        return f"Scale('{self.root}', '{orig_pitches}')"
+        return f"Palette('{orig_pitches}', '{self.root}')"
 
 def major_scale(root_str):
-    return Scale('c d e f g a b', root_str)
+    return Palette('c d e f g a b', root_str)
