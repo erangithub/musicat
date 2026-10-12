@@ -73,6 +73,9 @@ class Idea:
         from . import Part
         Part(self).show(time)
 
+    def _repr_svg_(self):
+        return self.show()
+
     def events(self):
         rhythm = self.rhythm or [WHOLE]
         pitches = self.pitches
@@ -84,17 +87,19 @@ class Idea:
         while i < (len_p or len_r):
             if rhythm[j] == REST_MARKER:
                 result.append(([], rhythm[j+1]))
-                j = (j+2) % len_r
-                continue
+                j += 2
             else:
                 if len_p:
                     result.append((pitches[i], rhythm[j]))
                     i = i+1
                 else:
                     result.append(([], rhythm[j]))
-                j = (j+1) % len_r
-            if j == 0 and len_p == 0:
-                break
+                j += 1
+            if j >= len_r:
+                if len_p == 0:
+                    break
+                else:
+                    j = 0
         return result
 
 def pitches(text):
