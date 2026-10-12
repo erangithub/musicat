@@ -6,7 +6,7 @@ LETTERS = 'cdefgab'
 NATURAL_PITCH = (0, 2, 4, 5, 7, 9, 11)
 
 class Pitch:
-    def __init__(self, name: str = "", min_octave: int = 0):
+    def __init__(self, name: str = "", min_octave: int = 4):
         if not name:
             self.idx = 0
             self.acc = 0

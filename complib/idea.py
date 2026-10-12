@@ -2,6 +2,7 @@ from .errors import SyntaxError
 from .pitches import parse_pitches
 from .degrees import parse_degrees, stack_degrees
 from .rhythm import parse_rhythm, REST_MARKER, WHOLE
+from .palette import Palette
 
 class Idea:
     def __init__(self, pitches=None, degrees=None, rhythm=None):
@@ -53,11 +54,16 @@ class Idea:
             rhythm=self.rhythm if self.rhythm is not None else other.rhythm)
 
     def as_pitches(self, palette):
+        if not isinstance(palette, Palette):
+            raise SyntaxError(f'Cannot resolve degrees against {palette!r}')
         if self.degrees is None:
             raise SyntaxError('An idea without degrees has no pitches to resolve')
         pitches = [[palette.at(number, acc) for number, acc in group]
                    for group in self.degrees]
         return Idea(pitches=pitches, rhythm=self.rhythm)
+
+    def __rshift__(self, palette):
+        return self.as_pitches(palette)
 
     def __len__(self):
         if self.pitches is not None:

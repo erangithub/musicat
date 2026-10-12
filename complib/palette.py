@@ -38,4 +38,7 @@ class Palette:
         return f"Palette('{orig_pitches}', '{self.root}')"
 
 def major_scale(root_str):
-    return Palette('c d e f g a b', root_str)
+    return Palette('c0 d e f g a b', root_str)
+
+def minor_scale(root_str):
+    return Palette('c0 d eb f g ab bb', root_str)
