@@ -146,10 +146,44 @@ def test_repeat_without_rhythm_joins_content():
     assert (pitches('c d') * 1) == pitches('c d')
 
 
-def test_repeat_with_rhythm_restarts_the_rhythm_each_time():
-    r = (pitches('c d') * rhythm('4 8')) * 2
-    assert r.rhythm == [F(1, 4), F(1, 8), LOOP_MARKER, F(1, 4), F(1, 8)]
+def test_repeat_realizes_the_rhythm_once_and_loops():
+    a = pitches('c d') * rhythm('4 8')
+    r = a * 2
+    assert r.rhythm == [F(1, 4), F(1, 8)]                 # not written out per pass
+    assert len(r) == 4
     assert durations(r) == [F(1, 4), F(1, 8), F(1, 4), F(1, 8)]
+    # the rhythm does not grow with the count
+    assert (a * 1000).rhythm == [F(1, 4), F(1, 8)] and len(a * 1000) == 2000
+    # a loop marker inside the rhythm is unrolled for one pass, so each pass restarts it
+    b = pitches('c d e') * rhythm('4 |: 8') * 2
+    assert b.rhythm == [F(1, 4), F(1, 8), F(1, 8)]
+    assert durations(b) == [F(1, 4), F(1, 8), F(1, 8)] * 2
+
+
+_REPEAT_NOTES = ['c', 'c d', 'c d e', 'c d e f g']
+_REPEAT_RHYTHMS = ['8', '4 8', '4 |: 8', '4 4 r2', 'r4 4', 'r4 |: 4', '4 |: r8 8',
+                   '2 r4 4 |: 8 16', 'r8 4 r8', '4 r4 r8 8']
+
+
+@pytest.mark.parametrize('rhythm_text', _REPEAT_RHYTHMS)
+def test_repeat_is_the_same_as_concatenating_copies(rhythm_text):
+    for notes in _REPEAT_NOTES:
+        a = pitches(notes) * rhythm(rhythm_text)
+        for count in (1, 2, 3, 5):
+            copies = a
+            for _ in range(count - 1):
+                copies = copies + a
+            assert ev(a * count) == ev(copies), (notes, rhythm_text, count)
+
+
+def test_repeat_leaves_the_original_alone_and_rhythm_only_stays_explicit():
+    a = pitches('c d') * rhythm('4 8')
+    before = repr(a)
+    a * 3
+    assert repr(a) == before
+    r = rhythm('4 8') * 2                    # nothing to loop over: written out
+    assert r.rhythm == [F(1, 4), F(1, 8), LOOP_MARKER, F(1, 4), F(1, 8)]
+    assert (degrees('1 2') * rhythm('4') * 3).degrees == degrees('1 2 1 2 1 2').degrees
 
 
 def test_rhythm_attached_after_repeat_cycles_across_everything():
@@ -201,7 +235,7 @@ def test_concat_a_without_rhythm_takes_first_duration_of_b_even_a_rest():
     b = pitches('e') * rhythm('r4 8')
     r = pitches('c d') + b
     assert ev(r) == [('c4', F(1, 4)), ('d4', F(1, 4)), ('rest', F(1, 4)),
-                     ('e4', F(1, 8)), ('rest', F(1, 4))]
+                     ('e4', F(1, 8))]
     r2 = pitches('c d') + pitches('e') * rhythm('8 4')
     assert durations(r2)[:2] == [F(1, 8), F(1, 8)]
 
@@ -287,12 +321,15 @@ def test_events_with_rests_and_trailing_rest():
         ('c4', F(1, 4)), ('d4', F(1, 4)), ('rest', F(1, 2)), ('e4', F(1, 4))]
 
 
-def test_events_leading_rest():
-    # the loop returns to the leading rest after c, and a rest that directly
-    # follows the last note is kept
-    assert ev(pitches('c') * rhythm('r4 4')) == [
-        ('rest', F(1, 4)), ('c4', F(1, 4)), ('rest', F(1, 4))]
-    assert ev(pitches('c') * rhythm('r4 |: 4')) == [('rest', F(1, 4)), ('c4', F(1, 4))]
+def test_events_rest_that_begins_the_next_pass_is_not_trailing():
+    assert ev(pitches('c') * rhythm('r4 4')) == [('rest', F(1, 4)), ('c4', F(1, 4))]
+    assert ev(pitches('c d') * rhythm('r4 4')) == [
+        ('rest', F(1, 4)), ('c4', F(1, 4)), ('rest', F(1, 4)), ('d4', F(1, 4))]
+    assert ev(pitches('c d e') * rhythm('4 |: r8 8')) == [
+        ('c4', F(1, 4)), ('rest', F(1, 8)), ('d4', F(1, 8)), ('rest', F(1, 8)), ('e4', F(1, 8))]
+    # a rest written at the end of the pass does trail
+    assert ev(pitches('c d') * rhythm('4 8 r8')) == [
+        ('c4', F(1, 4)), ('d4', F(1, 8)), ('rest', F(1, 8))]
 
 
 def test_events_rhythm_only_plays_every_step_once():
@@ -455,7 +492,11 @@ def test_repr_reads_like_the_expression_that_builds_it():
 def test_repr_shows_the_loop_marker_that_plus_inserts():
     r = pitches('c d') * rhythm('4 8') + pitches('e') * rhythm('2 |: 16')
     assert repr(r) == "pitches('c4 d4 e4') * rhythm('4 8 2 |: 16')"
-    assert repr(pitches('c d') * rhythm('4 8') * 2).endswith("rhythm('4 8 |: 4 8')")
+
+
+def test_repr_of_a_repeated_idea_stays_compact():
+    r = pitches('c d') * rhythm('4 8') * 2
+    assert repr(r) == "pitches('c4 d4 c4 d4') * rhythm('4 8')"
 
 
 def test_repr_prefers_dotted_durations():

@@ -100,12 +100,26 @@ class Idea:
         return Idea(content, self.rhythm if self.rhythm is not None else other.rhythm)
 
     def _repeat(self, count):
+        """Play this idea `count` times.
+
+        The rhythm is unrolled once over one pass of the notes and then simply
+        loops over the repeated notes, so it stays as long as the idea itself
+        however many times it repeats.
+        """
         if count < 1:
             raise SyntaxError(f'Repeat count must be a positive integer, not {count}')
-        result = self
-        for _ in range(count - 1):
-            result = result + self
-        return result
+        if count == 1:
+            return self
+        if self.content is None or not self.content.groups:
+            result = self                       # rhythm only: nothing to loop over
+            for _ in range(count - 1):
+                result = result + self
+            return result
+        content = type(self.content)(self.content.groups * count)
+        if self.rhythm is None:
+            return Idea(content)
+        one_pass = [(rest, duration) for rest, _, duration in self._realize()]
+        return Idea(content, rhythm_from_steps(one_pass, 0))
 
     # ---------------------------------------------------------- sequencing
 
@@ -197,8 +211,9 @@ class Idea:
 
         Returns [(is_rest, group, duration)], where group is None for rests and
         for the steps of a rhythm-only idea. Every note of the content is used
-        exactly once; after the last one, any rests that directly follow it in
-        the rhythm are kept, up to the next sounding step.
+        exactly once. Rests written after the last note, in the same pass of the
+        rhythm, are kept ('4 4 r2' over two notes ends with the half rest); a
+        rest that only begins the next pass of the loop is not.
         """
         if self.rhythm:
             steps, loop_start = rhythm_steps(self.rhythm)
@@ -213,18 +228,19 @@ class Idea:
         result = []
         used = 0
         k = 0
-        while True:
+        while used < len(groups):
             rest, duration = steps[k]
-            k += 1
-            if k == len(steps):
-                k = loop_start
             if rest:
                 result.append((True, None, duration))
-            elif used == len(groups):
-                break
             else:
                 result.append((False, groups[used], duration))
                 used += 1
+            k += 1
+            if k == len(steps) and used < len(groups):
+                k = loop_start
+        while k < len(steps) and steps[k][0]:
+            result.append((True, None, steps[k][1]))
+            k += 1
         return result
 
     def events(self):
