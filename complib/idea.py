@@ -97,7 +97,12 @@ class Idea:
             content = self.content.stack(other.content)
         else:
             raise SyntaxError("Cannot stack ideas that don't have degrees")
-        return Idea(content, self.rhythm if self.rhythm is not None else other.rhythm)
+
+        if self.rhythm:
+            one_pass = [(rest, duration) for rest, _, duration in self._realize()]
+            return Idea(content, rhythm_from_steps(one_pass, 0))
+        else:
+            return Idea(content, other.rhythm)
 
     def _repeat(self, count):
         """Play this idea `count` times.
