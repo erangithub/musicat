@@ -49,3 +49,18 @@ def stack_degrees(pattern1 : list[Degree], pattern2 : list[Degree]):
 
     return result
 
+
+def format_degrees(groups, limit=None):
+    """Inverse of parse_degrees: the text that parses back to `groups`.
+    With `limit`, only the first `limit` groups are written, followed by '… +N'."""
+    def name(degree):
+        number, acc = degree
+        return f'{number}{"#" * acc if acc > 0 else "b" * -acc}'
+    shown = groups if limit is None else groups[:limit]
+    tokens = []
+    for group in shown:
+        names = [name(degree) for degree in group]
+        tokens.append(names[0] if len(names) == 1 else '<' + ' '.join(names) + '>')
+    if len(shown) < len(groups):
+        tokens.append(f'… +{len(groups) - len(shown)}')
+    return ' '.join(tokens)

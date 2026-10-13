@@ -100,3 +100,29 @@ def rhythm_from_steps(steps, loop_start: int = 0) -> Rhythm:
             items.append(REST_MARKER)
         items.append(duration)
     return items
+
+
+def _format_duration(duration: Fraction) -> str:
+    for dots in range(4):
+        base = duration / (2 - Fraction(1, 2 ** dots))
+        if base.numerator == 1:
+            return f'{base.denominator}' + '.' * dots
+    return f'{duration.numerator}/{duration.denominator}'
+
+
+def format_rhythm(rhythm: Rhythm, limit=None) -> str:
+    """Inverse of parse_rhythm: the text that parses back to `rhythm`.
+    With `limit`, only the first `limit` tokens are written, followed by '…'."""
+    tokens = []
+    rest = False
+    for item in rhythm:
+        if isinstance(item, str) and item == LOOP_MARKER:
+            tokens.append(LOOP_MARKER)
+        elif isinstance(item, str) and item == REST_MARKER:
+            rest = True
+        else:
+            tokens.append(('r' if rest else '') + _format_duration(item))
+            rest = False
+    if limit is not None and len(tokens) > limit:
+        tokens = tokens[:limit] + ['…']
+    return ' '.join(tokens)

@@ -95,8 +95,6 @@ def test_equality_and_repr():
     assert degrees('1 2') == degrees('1 2')
     assert degrees('1 2') != degrees('1 3')
     assert degrees('1') != pitches('c')
-    assert repr(degrees('1') * rhythm('4')) == \
-        "Idea(degrees=[[(1, 0)]], rhythm=[Fraction(1, 4)])"
     assert len(degrees('1 2 3')) == 3 and len(Idea()) == 0
     assert Idea(rhythm=[]) == Idea()                       # empty rhythm is no rhythm
 
@@ -434,3 +432,100 @@ def test_harmonize_example():
 def test_empty_palette_rejected():
     with pytest.raises(SyntaxError, match='Empty palette'):
         Palette('')
+
+
+# -------------------------------------------------------------------- repr
+
+SCOPE = {'Idea': Idea, 'pitches': pitches, 'degrees': degrees, 'rhythm': rhythm}
+
+
+def roundtrips(idea):
+    return eval(repr(idea), SCOPE) == idea
+
+
+def test_repr_reads_like_the_expression_that_builds_it():
+    assert repr(pitches('c d e')) == "pitches('c4 d4 e4')"
+    assert repr(degrees('1 2 3')) == "degrees('1 2 3')"
+    assert repr(rhythm('4 r4 |: 8')) == "rhythm('4 r4 |: 8')"
+    assert repr(pitches('c d') * rhythm('4')) == "pitches('c4 d4') * rhythm('4')"
+    assert repr(degrees('<1 3 5> 2#') * rhythm('2')) == "degrees('<1 3 5> 2#') * rhythm('2')"
+    assert repr(Idea()) == 'Idea()'
+
+
+def test_repr_shows_the_loop_marker_that_plus_inserts():
+    r = pitches('c d') * rhythm('4 8') + pitches('e') * rhythm('2 |: 16')
+    assert repr(r) == "pitches('c4 d4 e4') * rhythm('4 8 2 |: 16')"
+    assert repr(pitches('c d') * rhythm('4 8') * 2).endswith("rhythm('4 8 |: 4 8')")
+
+
+def test_repr_prefers_dotted_durations():
+    assert repr(rhythm('4. 2.. 3/8 1/1 2/1')) == "rhythm('4. 2.. 4. 1 2/1')"
+
+
+EXAMPLES = [
+    Idea(),
+    pitches('c d e'),
+    pitches('<c4 e g> d <f a c5>'),
+    pitches('c#4 db4 bb3 c##5 cbb2 c-1 b#-2'),
+    pitches(''),
+    degrees('1 2 3'),
+    degrees('<1 3 5> -1 2# 3b 0 -7bb'),
+    rhythm('4 8'),
+    rhythm('4 r4 |: 8'),
+    rhythm('|: 4 8'),
+    rhythm('4. 2.. 3/8 12/8 2/1 1/12 5/8 7/16 3 r3 1/64 r1.'),
+    pitches('c d e') * rhythm('4 r4 |: 8'),
+    degrees('1 2') * rhythm('8'),
+    rhythm('8') * degrees('1 2 3') * degrees('0 1 2 3'),
+    (pitches('c d') * rhythm('4 8')) + (pitches('e f g') * rhythm('2 |: 16')),
+    pitches('c d') + pitches('e') * rhythm('r4 8'),
+    pitches('c d e') * rhythm('4 8') * 2,
+    pitches('c d e') * 2 * rhythm('4 8'),
+    degrees('1 2') * rhythm('4') + degrees('5') * rhythm('2'),
+    rhythm('4 8') + rhythm('2'),
+    degrees('1 2 3 4 5') * degrees('<1 3 5 7 9>') >> SIXTH_DIM,
+    degrees('1 2 3 4 5') * degrees('<1 -1 -3 -5>') * rhythm('4') >> SIXTH_DIM,
+]
+
+
+@pytest.mark.parametrize('idea', EXAMPLES, ids=repr)
+def test_repr_roundtrips_through_eval(idea):
+    assert roundtrips(idea)
+
+
+def test_harmonize_repr_roundtrips():
+    bebop = Palette('c d e f g ab a b')
+    h = (pitches('c d e g') << bebop) * degrees('<1 -1 -3 -5 -7>') >> bebop
+    assert len(h) == 4 and roundtrips(h)
+
+
+@pytest.mark.parametrize('name', PALETTES)
+def test_repr_roundtrips_every_pitch_the_palettes_make(name):
+    p = PALETTES[name]
+    for degree in range(-15, 25):
+        for acc in (-2, -1, 0, 1, 2):
+            single = Idea(Pitches([[p.at(degree, acc)]]))
+            assert roundtrips(single), (name, degree, acc, repr(single))
+    chord = Idea(Pitches([[p.at(d, a) for d in (-3, 1, 4, 9)] for a in (-1, 0, 1)]))
+    assert roundtrips(chord)
+
+
+def test_repr_roundtrips_every_degree_form():
+    for number in range(-20, 21):
+        for acc in (-2, -1, 0, 1, 2):
+            idea = Idea(Degrees([[(number, acc)], [(number, acc), (1, 0)]]))
+            assert roundtrips(idea), (number, acc)
+
+
+def test_repr_long_ideas_are_cut_short_and_say_so():
+    long = pitches(' '.join(['c4'] * 20))
+    text = repr(long)
+    assert text.count('c4') == 16 and text.endswith("… +4')")
+    assert len(repr(pitches(' '.join(['c'] * 500)))) < 120
+    long_rhythm = repr(rhythm(' '.join(['8'] * 40)))
+    assert long_rhythm.count('8') == 16 and '…' in long_rhythm
+    exactly = pitches(' '.join(['c4'] * 16))          # exactly at the limit: not cut
+    assert '…' not in repr(exactly) and roundtrips(exactly)
+    # a cut-short repr is for reading: it is not valid input
+    with pytest.raises(SyntaxError):
+        eval(text, SCOPE)

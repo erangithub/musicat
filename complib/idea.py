@@ -1,9 +1,15 @@
 from .errors import SyntaxError
-from .pitches import parse_pitches
-from .degrees import parse_degrees
-from .rhythm import parse_rhythm, rhythm_steps, rhythm_from_steps, WHOLE
+from .pitches import parse_pitches, format_pitches
+from .degrees import parse_degrees, format_degrees
+from .rhythm import (parse_rhythm, format_rhythm, rhythm_steps,
+                     rhythm_from_steps, WHOLE)
 from .palette import Palette
 from .content import Pitches, Degrees
+
+
+# how much of an idea its repr shows before truncating with '…'
+_REPR_GROUPS = 16
+_REPR_RHYTHM_TOKENS = 16
 
 
 def _is_count(value):
@@ -48,10 +54,17 @@ class Idea:
                 and self.rhythm == other.rhythm)
 
     def __repr__(self):
-        fields = ', '.join(
-            f'{name}={value!r}' for name in ('pitches', 'degrees', 'rhythm')
-            if (value := getattr(self, name)) is not None)
-        return f'Idea({fields})'
+        """The expression that builds this idea, e.g.
+        pitches('c4 d4 e4') * rhythm('4 r4 |: 8'). Long ideas are cut short with
+        '…' (those reprs are for reading, not for eval)."""
+        parts = []
+        if self.pitches is not None:
+            parts.append(f"pitches('{format_pitches(self.pitches, _REPR_GROUPS)}')")
+        elif self.degrees is not None:
+            parts.append(f"degrees('{format_degrees(self.degrees, _REPR_GROUPS)}')")
+        if self.rhythm is not None:
+            parts.append(f"rhythm('{format_rhythm(self.rhythm, _REPR_RHYTHM_TOKENS)}')")
+        return ' * '.join(parts) if parts else 'Idea()'
 
     def _is_empty(self):
         return self.content is None and self.rhythm is None

@@ -109,3 +109,20 @@ def parse_pitches(text):
     if position != len(text):
         raise SyntaxError(f'Illegal chord near "{text[position:].strip()}"')
     return groups
+
+
+def format_pitches(groups, limit=None):
+    """Inverse of parse_pitches: the text that parses back to `groups`.
+
+    Every note carries its octave, so the result does not depend on the
+    octave-carrying rules of the parser. With `limit`, only the first `limit`
+    groups are written, followed by '… +N' (that text is for reading, not parsing).
+    """
+    shown = groups if limit is None else groups[:limit]
+    tokens = []
+    for group in shown:
+        names = [str(pitch) for pitch in group]
+        tokens.append(names[0] if len(names) == 1 else '<' + ' '.join(names) + '>')
+    if len(shown) < len(groups):
+        tokens.append(f'… +{len(groups) - len(shown)}')
+    return ' '.join(tokens)
