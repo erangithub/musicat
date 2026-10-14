@@ -75,19 +75,25 @@ pitches('c4').content.pitch()   # [[Pitch('c4')]]  materialise the I/O value
 ```
 
 A palette is just another `Idea`/`Degrees`, so `>>` composes degrees through it and `<<` is the
-inverse. Selection is `>>` too: a pattern of positions picks those notes out of a palette, keep the
-left side's chords, and flattens the palette's:
+inverse. Its groups are flattened, and it **closes explicitly**: all but the last note form the
+repeating unit, and the last note is a marker whose interval above the first note is the period — so
+`c d e` repeats as `c d | e f | g a | b c …`. Write palettes with their closing octave (`c4 e g c5`,
+`d4 f a d5`) to repeat by octave. Selection is `>>` too: a pattern of positions picks those notes out
+of a palette, keeps the left side's chords, and flattens the palette's:
 
 ```python
-degrees('1 4 7') >> pitches('d4 f a')      # d4 d5 d6
+degrees('1 4 7') >> pitches('d4 f a d5')   # d4 d5 d6
 degrees('2 3 4 5 6 7 8') >> major_scale('c')   # D Dorian
 pitches('c4 db4 c#4 d4') << major_scale('c')   # 1, 2b, 1#, 2  (spelling kept)
 ```
 
-`major_scale(root)` and `minor_scale(root)` return the scale as `Degrees`:
+A single-note palette has period zero and just returns that note.
+
+`major_scale(root)` and `minor_scale(root)` return the scale as `Degrees`, including the closing
+octave so the period is one octave:
 
 ```python
-major_scale('f')            # Degrees('32 33 34 35b 36 37 38')  = f4 g4 a4 bb4 c5 d5 e5
+major_scale('f')            # Degrees('32 33 34 35b 36 37 38 39')  = f4 g4 a4 bb4 c5 d5 e5 f5
 ```
 
 ## Rhythm and events

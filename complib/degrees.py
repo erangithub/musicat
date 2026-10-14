@@ -161,17 +161,25 @@ class Degrees:
         return [note for group in self.groups for note in group]
 
     def _at(self, degree, acc=0):
-        """The (number, accidental) at `degree`, looping the palette by octaves.
+        """The (number, accidental) at `degree`, looping the palette.
 
-        A palette's groups are flattened, so a chord written as a palette is
-        just its notes in order. The base palette (1..7) is the identity.
+        A palette's groups are flattened. All but the last note form the unit
+        that repeats; the last note is a marker whose interval above the first
+        note is the period, so `c d e` repeats as `c d | e f | g a | b c ...`.
+        A single-note palette has period zero and just returns that note.
         """
         notes = self._flat()
         if not notes:
             raise SyntaxError('Empty palette')
-        octaves, index = divmod(degree - 1, len(notes))
-        number, base_acc = notes[index]
-        return (number + 7 * octaves, base_acc + acc)
+        if len(notes) == 1:
+            number, base_acc = notes[0]
+            return (number, base_acc + acc)
+        unit = notes[:-1]
+        period_number = notes[-1][0] - notes[0][0]
+        period_acc = notes[-1][1] - notes[0][1]
+        cycles, index = divmod(degree - 1, len(unit))
+        number, base_acc = unit[index]
+        return (number + cycles * period_number, base_acc + cycles * period_acc + acc)
 
     def _degree_of(self, number, acc=0, strict=False):
         """Inverse of `_at`: the (degree, accidental) that `_at` maps here.
@@ -185,15 +193,36 @@ class Degrees:
         notes = self._flat()
         if not notes:
             raise SyntaxError('Empty palette')
-        length = len(notes)
-        letter = (number - 1) % 7
         name = format_degrees([[(number, acc)]])
-        best = None
-        for j, (base, base_acc) in enumerate(notes):
-            if (base - 1) % 7 != letter:
-                continue
-            degree = j + 1 + (number - base) // 7 * length
+        if len(notes) == 1:
+            base, base_acc = notes[0]
             residual = acc - base_acc
+            if strict and residual:
+                raise SyntaxError(f'{name} is not in the palette')
+            return (1, residual)
+        unit = notes[:-1]
+        period_number = notes[-1][0] - notes[0][0]
+        period_acc = notes[-1][1] - notes[0][1]
+        length = len(unit)
+        best = None
+        for i, (base, base_acc) in enumerate(unit):
+            if period_number:
+                diff = number - base
+                if diff % period_number:
+                    continue
+                q = diff // period_number
+            elif number == base:
+                if period_acc:
+                    diff_acc = acc - base_acc
+                    if diff_acc % period_acc:
+                        continue
+                    q = diff_acc // period_acc
+                else:
+                    q = 0
+            else:
+                continue
+            degree = i + 1 + q * length
+            residual = acc - (base_acc + q * period_acc)
             if best is None or (abs(residual), degree) < (abs(best[1]), best[0]):
                 best = (degree, residual)
         if best is not None:
@@ -206,12 +235,17 @@ class Degrees:
         target.idx = number - 1
         target.acc = acc
         nearest = None
-        for j, (base, base_acc) in enumerate(notes):
-            for q in ((number - base) // 7, (number - base) // 7 + 1):
+        for i, (base, base_acc) in enumerate(unit):
+            if period_number:
+                q0 = (number - base) // period_number
+                steps = (q0, q0 + 1, q0 - 1)
+            else:
+                steps = (0,)
+            for q in steps:
                 pitch = Pitch()
-                pitch.idx = base - 1 + 7 * q
-                pitch.acc = base_acc
-                degree = j + 1 + q * length
+                pitch.idx = base - 1 + q * period_number
+                pitch.acc = base_acc + q * period_acc
+                degree = i + 1 + q * length
                 key = (abs(target.midipitch() - pitch.midipitch()), degree)
                 if nearest is None or key < nearest[0]:
                     nearest = (key, degree, pitch.midipitch())
@@ -260,11 +294,15 @@ class Degrees:
 
 def major_scale(root_str):
     root = Pitch(root_str)
-    notes = [root + Pitch(name, 0) for name in ('c', 'd', 'e', 'f', 'g', 'a', 'b')]
+    names = ('c', 'd', 'e', 'f', 'g', 'a', 'b')
+    notes = [root + Pitch(name, 0) for name in names]
+    notes.append(root + Pitch('c', 1))            # close the octave (the period marker)
     return Degrees([[(pitch.idx + 1, pitch.acc)] for pitch in notes])
 
 
 def minor_scale(root_str):
     root = Pitch(root_str)
-    notes = [root + Pitch(name, 0) for name in ('c', 'd', 'eb', 'f', 'g', 'ab', 'bb')]
+    names = ('c', 'd', 'eb', 'f', 'g', 'ab', 'bb')
+    notes = [root + Pitch(name, 0) for name in names]
+    notes.append(root + Pitch('c', 1))            # close the octave (the period marker)
     return Degrees([[(pitch.idx + 1, pitch.acc)] for pitch in notes])

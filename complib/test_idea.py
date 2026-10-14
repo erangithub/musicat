@@ -6,14 +6,14 @@ from complib import (Idea, Pitch, Degrees, Part, SyntaxError,
 from complib.rhythm import (LOOP_MARKER, REST_MARKER, parse_rhythm,
                             rhythm_from_steps, rhythm_steps)
 
-SIXTH_DIM = pitches('c d e f g ab a b').content
+SIXTH_DIM = pitches('c4 d e f g ab a b c5').content
 PALETTES = {
     'major C': major_scale('c'),
     'major F': major_scale('f'),
     'minor A': minor_scale('a'),
-    'triad': pitches('d4 f a').content,
+    'triad': pitches('d4 f a d5').content,
     'sixth-dim': SIXTH_DIM,
-    'pentatonic': pitches('c0 d e g a').content,
+    'pentatonic': pitches('c0 d e g a c1').content,
 }
 
 
@@ -126,7 +126,7 @@ def test_layer_and_stack_errors():
 
 
 def test_user_arpeggio_example():
-    idea = rhythm('8') * degrees('1 2 3') * degrees('0 1 2 3') >> pitches('d4 f a')
+    idea = rhythm('8') * degrees('1 2 3') * degrees('0 1 2 3') >> pitches('d4 f a d5')
     assert isinstance(idea.content, Degrees)
     assert idea.rhythm == [F(1, 8), F(1, 8), F(1, 8)]
     assert names(idea) == [['a3'], ['d4'], ['f4'], ['d4'], ['f4'], ['a4'],
@@ -351,9 +351,9 @@ def test_part_accepts_degrees():
 # --------------------------------------------------------- >> and << (palette)
 
 def test_degrees_to_pitches():
-    assert names(degrees('1 2 3') >> pitches('d4 f a')) == [['d4'], ['f4'], ['a4']]
-    assert names(degrees('1 4 7') >> pitches('d4 f a')) == [['d4'], ['d5'], ['d6']]
-    assert names(degrees('0 -1') >> pitches('d4 f a')) == [['a3'], ['f3']]
+    assert names(degrees('1 2 3') >> pitches('d4 f a d5')) == [['d4'], ['f4'], ['a4']]
+    assert names(degrees('1 4 7') >> pitches('d4 f a d5')) == [['d4'], ['d5'], ['d6']]
+    assert names(degrees('0 -1') >> pitches('d4 f a d5')) == [['a3'], ['f3']]
 
 
 def test_rhythm_survives_both_directions():
@@ -422,7 +422,7 @@ def test_degree_roundtrip_exact_for_distinct_letters(name):
 
 
 def test_reharmonize_pipeline():
-    out = pitches('c e g') << major_scale('c') >> pitches('d4 f a')
+    out = pitches('c e g') << major_scale('c') >> pitches('d4 f a d5')
     assert names(out) == [['d4'], ['a4'], ['f5']]
 
 
@@ -446,7 +446,7 @@ def test_shearing_examples():
 
 def test_harmonize_example():
     def harmonize(melody):
-        bebop = pitches('c d e f g ab a b')
+        bebop = pitches('c4 d e f g ab a b c5')
         return (pitches(melody) << bebop) * degrees('<1 -1 -3 -5 -7>') >> bebop
     h = harmonize('c d e g f ab g')
     assert names(h)[0] == ['c4', 'a3', 'g3', 'e3', 'c3']          # C6, melody on top
@@ -526,7 +526,7 @@ def test_repr_roundtrips_through_eval(idea):
 
 
 def test_harmonize_repr_roundtrips():
-    bebop = pitches('c d e f g ab a b')
+    bebop = pitches('c4 d e f g ab a b c5')
     h = (pitches('c d e g') << bebop) * degrees('<1 -1 -3 -5 -7>') >> bebop
     assert len(h) == 4 and roundtrips(h)
 

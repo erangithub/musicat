@@ -23,8 +23,8 @@ right_hand = (theme + runs) >> C
 # bars 1-4: an Alberti bass. The figure is low-high-middle-high, so it is the
 # same degrees over each chord; the chord is the palette.
 alberti = degrees('1 3 2 3')
-tonic = 'c4 e g'
-chords = [tonic, tonic,   'd4 f g', tonic,   'c4 f a', tonic,   'b3 d4 g4', tonic]
+tonic = 'c4 e g c5'
+chords = [tonic, tonic,   'd4 f g d5', tonic,   'c4 f a c5', tonic,   'b3 d4 g4 b4', tonic]
 alberti_bars = sum((alberti >> pitches(chord) for chord in chords), Idea()) * rhythm('8')
 
 # bars 5-8: bass note and a dyad on the fourth beat
