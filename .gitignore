@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 .venv/
 *.swp
+*.swo
+*.zip
 .DS_Store
 .ipynb_checkpoints/
 *.ipynb
