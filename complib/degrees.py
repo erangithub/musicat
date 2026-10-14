@@ -1,6 +1,7 @@
 import re
 
 from .errors import SyntaxError
+from .pitches import Pitch
 
 Degree = tuple[int, int]
 
@@ -123,3 +124,147 @@ def format_degrees(groups, limit=None):
     if len(shown) < len(groups):
         tokens.append(f'… +{len(groups) - len(shown)}')
     return ' '.join(tokens)
+
+
+class Degrees:
+    """Scale degrees: a list of groups (a group is one note or a chord).
+
+    The one content type. Numbers are absolute over the 7-letter base, so c0 is
+    1, b0 is 7 and c1 is 8; the base palette is therefore the identity. A
+    Degrees also serves as a palette: `content >> palette` composes one through
+    the other, `palette.at`/`degree_of` being the two directions.
+    """
+
+    kind = 'degrees'
+
+    def __init__(self, groups):
+        self.groups = groups
+
+    def __len__(self):
+        return len(self.groups)
+
+    def __iter__(self):
+        return iter(self.groups)
+
+    def __getitem__(self, index):
+        return self.groups[index]
+
+    def __eq__(self, other):
+        return type(other) is Degrees and self.groups == other.groups
+
+    def __repr__(self):
+        return f"Degrees('{format_degrees(self.groups)}')"
+
+    # ---------------------------------------------------------- palette view
+
+    def _flat(self):
+        return [note for group in self.groups for note in group]
+
+    def _at(self, degree, acc=0):
+        """The (number, accidental) at `degree`, looping the palette by octaves.
+
+        A palette's groups are flattened, so a chord written as a palette is
+        just its notes in order. The base palette (1..7) is the identity.
+        """
+        notes = self._flat()
+        if not notes:
+            raise SyntaxError('Empty palette')
+        octaves, index = divmod(degree - 1, len(notes))
+        number, base_acc = notes[index]
+        return (number + 7 * octaves, base_acc + acc)
+
+    def _degree_of(self, number, acc=0, strict=False):
+        """Inverse of `_at`: the (degree, accidental) that `_at` maps here.
+
+        Spelling is preserved: a degree is chosen whose letter matches. If the
+        palette has several such degrees the one needing the smallest accidental
+        wins, then the lowest degree. If no degree shares the letter the nearest
+        degree by sound is used (round-tripping the sound, not the spelling).
+        With strict=True a note that is not exactly a palette note raises.
+        """
+        notes = self._flat()
+        if not notes:
+            raise SyntaxError('Empty palette')
+        length = len(notes)
+        letter = (number - 1) % 7
+        name = format_degrees([[(number, acc)]])
+        best = None
+        for j, (base, base_acc) in enumerate(notes):
+            if (base - 1) % 7 != letter:
+                continue
+            degree = j + 1 + (number - base) // 7 * length
+            residual = acc - base_acc
+            if best is None or (abs(residual), degree) < (abs(best[1]), best[0]):
+                best = (degree, residual)
+        if best is not None:
+            if strict and best[1]:
+                raise SyntaxError(f'{name} is not in the palette')
+            return best
+        if strict:
+            raise SyntaxError(f'{name} is not in the palette')
+        target = Pitch()
+        target.idx = number - 1
+        target.acc = acc
+        nearest = None
+        for j, (base, base_acc) in enumerate(notes):
+            for q in ((number - base) // 7, (number - base) // 7 + 1):
+                pitch = Pitch()
+                pitch.idx = base - 1 + 7 * q
+                pitch.acc = base_acc
+                degree = j + 1 + q * length
+                key = (abs(target.midipitch() - pitch.midipitch()), degree)
+                if nearest is None or key < nearest[0]:
+                    nearest = (key, degree, pitch.midipitch())
+        return nearest[1], target.midipitch() - nearest[2]
+
+    # ------------------------------------------------------------ operations
+
+    def compose(self, other):
+        """`self` seen in `other`: every degree resolved/selected through the
+        palette `other`. Chords of `self` are kept; `other`'s groups are flat."""
+        if not isinstance(other, Degrees):
+            raise SyntaxError(f'Cannot compose with {other!r}: expected degrees')
+        return Degrees([[other._at(number, acc) for number, acc in group]
+                        for group in self.groups])
+
+    def decompose(self, other, strict=False):
+        """`self`'s notes as (degree, accidental) in the palette `other`."""
+        if not isinstance(other, Degrees):
+            raise SyntaxError(f'Cannot decompose against {other!r}: expected degrees')
+        return Degrees([[other._degree_of(number, acc, strict)
+                         for number, acc in group] for group in self.groups])
+
+    def stack(self, other):
+        """Stack another degree pattern on top of this one (interval addition)."""
+        return Degrees(stack_degrees(self.groups, other.groups))
+
+    def pitch(self):
+        """These degrees as concrete pitches (the I/O value), groups kept."""
+        result = []
+        for group in self.groups:
+            notes = []
+            for number, acc in group:
+                pitch = Pitch()
+                pitch.idx = number - 1
+                pitch.acc = acc
+                notes.append(pitch)
+            result.append(notes)
+        return result
+
+    def __rshift__(self, other):
+        return self.compose(other)
+
+    def __lshift__(self, other):
+        return self.decompose(other)
+
+
+def major_scale(root_str):
+    root = Pitch(root_str)
+    notes = [root + Pitch(name, 0) for name in ('c', 'd', 'e', 'f', 'g', 'a', 'b')]
+    return Degrees([[(pitch.idx + 1, pitch.acc)] for pitch in notes])
+
+
+def minor_scale(root_str):
+    root = Pitch(root_str)
+    notes = [root + Pitch(name, 0) for name in ('c', 'd', 'eb', 'f', 'g', 'ab', 'bb')]
+    return Degrees([[(pitch.idx + 1, pitch.acc)] for pitch in notes])

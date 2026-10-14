@@ -82,10 +82,7 @@ def _beams(measure, beat_ticks, group_ticks):
 def show_score(score: Score):
     parts_events = []
     for part in score.parts:
-        idea = part.idea
-        if (idea.pitches is None and idea.degrees is not None):
-            raise(RuntimeError("Can't display degree based idea"))
-        parts_events.append(idea.events())
+        parts_events.append(part.idea.events())
     units = lcm(4, score.beat_type,
                 *[duration.denominator for events in parts_events
                   for _, duration in events])

@@ -5,8 +5,6 @@ from .errors import SyntaxError
 
 class Part:
     def __init__(self, idea, name='Music'):
-        if idea.degrees is not None:
-            raise SyntaxError('Resolve degrees to pitches before making a Part')
         self.idea = idea
         self.name = name
 
@@ -14,9 +12,7 @@ class Part:
         return self.name
 
     def __repr__(self):
-        pitches = self.idea.pitches
-        count = len(pitches if pitches is not None else self.idea.rhythm)
-        return f"Part('{self.name}', {count} events)"
+        return f"Part('{self.name}', {len(self.idea)} events)"
 
     def show(self, time='4/4'):
         from . import render_verovio

@@ -1,7 +1,7 @@
 # complib
 
-A programmable library for composing music. Draft stage: pitches, scales, durations, events, scores with parts, and
-notation rendering via Verovio.
+A programmable library for composing music. Draft stage: an `Idea` is content (degrees) plus
+a rhythm, combined with operators, resolved through palettes, and rendered to notation via Verovio.
 
 ## Setup
 
@@ -37,133 +37,111 @@ Stop the server with `Ctrl-C`.
 ## Using complib in a notebook
 
 ```python
-from complib import Pitch, to_pitches, to_rhythm, combine, show_seq, major_scale, show
+from complib import degrees, pitches, rhythm, major_scale, show
 
-to_pitches('c <e g>')                      # [[c], [e, g]] — one list of pitches per event
-[str(p) for p in major_scale('d')]         # ['d', 'e', 'f#', 'g', 'a', 'b', 'c#']
-Pitch('f#4').midipitch()                   # 66
-to_rhythm('/4 1/8. /16')                   # [1/4, 3/16, 1/16]
-
-seq = combine(to_pitches('c e g'), to_rhythm('/4 /8'))
-[str(e) for e in seq]                      # ['c 1/4', 'e 1/8', 'g 1/4']
-show_seq(seq)                              # c, e, g as a quarter, an eighth, a quarter
+melody = degrees('1 2 3 1') * rhythm('4 4 4 2') >> major_scale('c')
+melody.show()                              # renders the line inline
 ```
 
-`show(musicxml)` renders MusicXML with Verovio and displays the score inline in the notebook. `mock/probe.musicxml` is
-a four-bar melody to try it with:
+An `Idea` has two slots: `content` (degrees) and `rhythm`. Either may be missing. Three levels of
+operator combine ideas, tightest first:
 
-```python
-show()                                     # loads mock/probe.musicxml
-show(open('mock/probe.musicxml').read())
+```
+*       builds:     rhythm * degrees layers a rhythm onto notes;
+                    degrees * degrees stacks; idea * 3 repeats.
++       sequences:  a + b plays a, then b.
+>> <<   resolves:   degrees >> palette selects/resolves through a palette;
+                    notes << palette recovers their degrees.
 ```
 
-Rendering is fast enough to be interactive: Verovio loads and renders that melody in under 10 ms. For
-print-quality output, LilyPond (`brew install lilypond`) compiles the same music in ~0.7 s.
-
-## Durations, rhythms and events
-
-Durations are whole-note relative `Fraction`s: `1` is a whole note, `1/4` a quarter. `to_rhythm` reads `a/b`, `/b`
-(meaning `1/b`), `a`, and trailing dots for dotted values:
-
 ```python
-to_rhythm('1/4 1/8. /16')      # 1/4, 3/16, 1/16
+rhythm('8') * degrees('1 2 3')             # three notes, each an eighth (looping rhythm)
+degrees('1 3 5') >> major_scale('c')       # c4 e4 g4
+degrees('1 2') + degrees('5')              # 1 2 5
+degrees('1 2') * 3                         # 1 2 1 2 1 2
 ```
 
-`to_pitches` returns one list of pitches per event. `<...>` collects a chord, and an empty `<>` is a rest, so a rest can
-be written in the same text as the notes around it:
+## Degrees and palettes
+
+There is one content type, `Degrees`: a list of groups, each group one note or a chord of
+`(number, accidental)`. Numbers are absolute over the 7-letter base — `c0` is `1`, `b0` is `7`,
+`c1` is `8` — so the plain letters are the identity palette. `pitches(text)` parses letter names into
+the same type as input sugar:
 
 ```python
-to_pitches('c <d f> e')     # [[c], [d, f], [e]]
-to_pitches('c <> <e g>')    # [[c], [], [e, g]]
+degrees('1 3 5')            # Degrees('1 3 5')
+pitches('c4 e4 g4')         # degrees('29 31 33')  (the same thing)
+pitches('c4').content.pitch()   # [[Pitch('c4')]]  materialise the I/O value
 ```
 
-`combine(pitches, rhythm)` pairs those groups with durations, cycling the rhythm when it is shorter than the group list.
-Each group is a pitch or a list of pitches:
+A palette is just another `Idea`/`Degrees`, so `>>` composes degrees through it and `<<` is the
+inverse. Selection is `>>` too: a pattern of positions picks those notes out of a palette, keep the
+left side's chords, and flattens the palette's:
 
 ```python
-combine(to_pitches('c <e g> <>'), to_rhythm('1/2 1/4 1/4'))   # c 1/2, chord e g 1/4, rest 1/4
-combine([['c', 'e'], []], to_rhythm('1/2 1/4'))               # chord c e 1/2, rest 1/4
-combine(['c', 'e'], to_rhythm('1/4 1/4'))                      # two notes
-combine(to_pitches('c d e f g a b c'), to_rhythm('/8'))        # one bar of eighths
+degrees('1 4 7') >> pitches('d4 f a')      # d4 d5 d6
+degrees('2 3 4 5 6 7 8') >> major_scale('c')   # D Dorian
+pitches('c4 db4 c#4 d4') << major_scale('c')   # 1, 2b, 1#, 2  (spelling kept)
 ```
 
-A chord is its own event, so `c <d f>` is a note followed by a chord, not a chord of `c d f` — write `<c d f>` for that.
-Unbalanced or nested brackets raise `SyntaxError`, as does an unknown pitch name.
-
-Chord pitches are voiced low to high: one that would land at or below the pitch before it moves up an octave, so
-`<c e g c>` is `c4 e4 g4 c5` and `<g c e>` is `g4 c5 e5`. The first pitch without an octave sits in octave 4, and octaves
-you write yourself are respected — `<c3 e g>` is `c3 e3 g3`, and `<c3 e4 g c>` wraps from the `e4` you gave:
+`major_scale(root)` and `minor_scale(root)` return the scale as `Degrees`:
 
 ```python
-combine(to_pitches('<c e g c c>'), to_rhythm('1/2'))[0]   # Chord('c4 e4 g4 c5 c6', 1/2)
+major_scale('f')            # Degrees('32 33 34 35b 36 37 38')  = f4 g4 a4 bb4 c5 d5 e5
 ```
 
-Single notes are left alone, so a melody may descend: `to_pitches('c e g c')` stays four pitch classes, and `c3` is how
-you ask for the lower c. A chord that would need an octave above 7 raises `SyntaxError`.
+## Rhythm and events
 
-A `Score` is a list of `Part`s plus a time signature written as a string, in the same text-first style as the rest of the
-library. A `Part` is one line of music — in MusicXML terms a *staff*, not an instrument, so a piano is two parts:
+Durations are whole-note relative `Fraction`s (`1` is a whole, `1/4` a quarter). A rhythm loops over
+the content; `|:` marks where the repeating part starts (`'4 |: 8'` is a quarter then eighths forever)
+and `r` prefixes a rest (`'r4'`). `_realize`/`events()` unroll an idea into `(pitch group, duration)`
+pairs, which is what rendering consumes:
 
 ```python
+(degrees('1 2 3') * rhythm('4 8')).events()   # [(c0, 1/4), (d0, 1/8), (e0, 1/4)]
+```
+
+## Scores and rendering
+
+A `Score` is a list of `Part`s plus a time signature written as a string. A `Part` is one line of
+music (in MusicXML terms a *staff*, so a piano is two parts):
+
+```python
+from complib import Part, Score
+
 score = Score([Part(melody, 'Flute'), Part(accomp, 'Piano RH')], '6/8')
-str(score)     # Flute, Piano RH in 6/8
+str(score)          # Flute, Piano RH in 6/8
+score.show()        # or melody.show() for a single line
 ```
 
-Bar length comes from the meter as `Fraction(beats, beat_type)`, so 6/8 is six eighths to a bar and 2/2 is four quarters:
-
-```python
-show_seq(combine(to_pitches('c d e f g a b c'), to_rhythm('1/4')), '3/4')   # bars of 3, 3, 2
-```
-
-Parts are independent timelines that share one `divisions`, so they line up measure for measure. A part that plays nothing
-while another part plays writes `<>`; there is no automatic alignment or note spreading between parts.
-
-`show_seq(sequence, time='4/4')` is shorthand for a single-part score, and `show_score(score)` renders any number of
-parts. Both map every duration to a MusicXML note type, dots and tuplet ratio, and derive `divisions` from the least
-common multiple of all the denominators so each duration lands on a whole tick. `1/5` becomes a quarter with a 5:4 time
-modification, `1/12` an eighth with 3:2.
-
-Beaming follows the meter: the primary beam spans the beat — a dotted quarter in `6/8`, a half in `2/2` — while
-secondary beams subdivide the beat. Rests and lone notes break a run, chords carry the beam on their lowest note, and
-beams never cross a barline. In meters whose beat is shorter than a quarter (`5/8`, `7/8`, `5/16`) every note is its own
-beat, so eighths are left flagged instead of beamed.
-
-Rendering limits for now: an event that does not fit the remaining bar starts the next bar instead of being tied across it,
-and tuplets carry a time modification but no bracket. One time signature covers the whole score — meter changes mid-piece,
-pickup bars and key changes are not modelled yet.
-
-Pitches and events compare by value and are hashable:
-
-```python
-combine(to_pitches('c e g'), to_rhythm('/4 /8')) == combine(to_pitches('c e g'), to_rhythm('/4 /8'))   # True
-Note('c') == Chord(['c'])      # False — a note is not a chord
-Pitch('c#4') == Pitch('db4')   # False — both are MIDI 61, but the spelling differs
-```
+`show(musicxml)` renders raw MusicXML through Verovio and displays it inline (defaults to
+`mock/probe.musicxml`); `show_score(score)` renders a whole score. Durations map to MusicXML note
+types, dots and tuplet ratios, and `divisions` is derived from the least common multiple of the
+denominators so every duration lands on a whole tick. Beaming follows the meter, rests and lone
+notes break runs, and beams never cross a barline.
 
 ## Current API
 
 | | |
 |---|---|
-| `Pitch(name)` | Parses `c`, `f#`, `bb3`, `c-1`. Attributes: `name`, `root`, `accidental`, `octave`. |
-| `Pitch.midipitch()` | MIDI note number, e.g. `c4` → 60. Without an octave it returns the pitch class. |
-| `Duration` | Alias for `fractions.Fraction`. Durations are whole-note relative, so `1` is a whole note. |
-| `Rhythm` | Alias for `list[Duration]`. |
-| `WHOLE`, `HALF`, `QUARTER`, `EIGHTH`, `SIXTEENTH`, `THIRTY_SECOND` | Note values as durations, e.g. `QUARTER` is `Fraction(1, 4)`. |
-| `DOT`, `DOUBLE_DOT` | `Fraction(3, 2)` and `Fraction(7, 4)`; multiply a note value to dot it, as in `QUARTER * DOT`. |
-| `Event(pitches, duration)` | Base class: anything that occupies time. Holds a `pitches` list and a `duration`. |
-| `Note(pitch, duration)` | An `Event` with one pitch. |
-| `Chord(pitches, duration)` | An `Event` with two or more pitches, voiced low to high. |
-| `Rest(duration)` | An `Event` with no pitches. |
-| `Event.midipitches()` | MIDI numbers of the event's pitches, e.g. `[0, 4, 7]` for `c e g`. |
-| `major_scale(root)` | The seven pitches of the major scale, spelled correctly for the root (`major_scale('bb')` → `bb c d eb f g a`). |
-| `to_pitches(text)` | Parses pitch text into one list of pitches per event. `<d f>` is a chord, `<>` a rest. |
-| `to_rhythm(text)` | Parses whitespace-separated durations into a list of `Fraction`. |
-| `combine(pitches, rhythm)` | Zips groups of pitches with durations into a list of events, cycling the rhythm as needed. Accepts the output of `to_pitches`, or hand-written lists. |
-| `show(musicxml=None)` | Renders MusicXML through Verovio and displays it inline in Jupyter. Defaults to `mock/probe.musicxml`. |
-| `Part(sequence, name='Music')` | One line of music: a sequence of events, and the name the score shows for it. |
-| `Score(parts, time='4/4')` | A list of `Part`s and the time signature, written as `'6/8'`, `'3/4'`, `'5/4'`. |
-| `show_seq(sequence, time='4/4')` | Renders a single sequence as MusicXML in memory and displays it. Shorthand for a one-part score. |
-| `show_score(score)` | Renders every part of a score as MusicXML in memory and displays it. |
+| `Idea(content=None, rhythm=None)` | Content (a `Degrees`) plus a rhythm. Empty is the identity for `+`. |
+| `pitches(text)` | Parses `c`, `f#`, `bb3`, `<c e g>` into an `Idea` of degrees (letter input sugar). |
+| `degrees(text)` | Parses `1 3 5`, `<1 3 5>`, `1..5`, `2#` into an `Idea` of degrees. |
+| `rhythm(text)` | Parses `4 8 r4 \|: 16` into a rhythm-only `Idea`. |
+| `idea * other` | Layer a rhythm onto notes, stack degrees, or repeat by an int. |
+| `idea + other` | Play this idea, then `other`. |
+| `idea >> palette` | Compose/select/resolve degrees through a palette (an `Idea` or `Degrees`). |
+| `idea << palette` | Recover the degrees of pitches in a palette. |
+| `Degrees(groups)` | The one content type: groups of `(number, accidental)`. |
+| `Degrees.compose(other)` / `.decompose(other, strict=False)` | The two directions of `>>` / `<<`. |
+| `Degrees.pitch()` | Materialise as groups of `Pitch` (the I/O value). |
+| `major_scale(root)` / `minor_scale(root)` | The scale as `Degrees`. |
+| `Pitch(name)` | Parses `c`, `f#`, `bb3`, `c-1`; `midipitch()` is the MIDI number. |
+| `Event`/`Sequence` model | Replaced by `Idea`; `events()` unrolls one into `(group, duration)` pairs. |
+| `Part(idea, name='Music')` | One staff of a score. |
+| `Score(parts, time='4/4')` | A list of `Part`s and the time signature, written `'6/8'`. |
+| `show(musicxml=None)` | Renders MusicXML through Verovio inline in Jupyter. |
+| `show_score(score)` | Renders every part of a score. |
 
 ## Conventions
 

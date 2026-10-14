@@ -1,10 +1,8 @@
 from .errors import SyntaxError
-from .pitches import parse_pitches, format_pitches
-from .degrees import parse_degrees, format_degrees
+from .pitches import parse_pitches
+from .degrees import parse_degrees, format_degrees, Degrees
 from .rhythm import (parse_rhythm, format_rhythm, rhythm_steps,
                      rhythm_from_steps, WHOLE)
-from .palette import Palette
-from .content import Pitches, Degrees
 
 
 # how much of an idea its repr shows before truncating with '…'
@@ -17,17 +15,17 @@ def _is_count(value):
 
 
 class Idea:
-    """A musical idea: optional content (Pitches or Degrees) plus optional rhythm.
+    """A musical idea: optional content (Degrees) plus optional rhythm.
 
     Three levels of operator, tightest first:
 
       *       builds:     rhythm * degrees layers a rhythm onto notes,
                           degrees * degrees stacks, idea * 3 repeats.
       +       sequences:  a + b plays a, then b.
-      >> <<   resolves:   degrees >> palette gives pitches,
-                          pitches << palette gives degrees.
+      >> <<   resolves:   degrees >> palette selects/resolves through a palette,
+                          notes << palette asks for their degrees.
 
-        rhythm('8') * degrees('1 2 3') * degrees('0 1 2 3') >> Palette('d4 f a')
+        rhythm('8') * degrees('1 2 3') * degrees('0 1 2 3') >> degrees('d4 f a')
 
     A rhythm loops over the content: with no loop marker the whole rhythm
     repeats, and '|:' marks where the repeating part starts ('4 |: 8' is a
@@ -35,18 +33,10 @@ class Idea:
     """
 
     def __init__(self, content=None, rhythm=None):
-        if content is not None and not isinstance(content, (Pitches, Degrees)):
+        if content is not None and not isinstance(content, Degrees):
             raise SyntaxError(f'Illegal content {content!r}')
         self.content = content
         self.rhythm = rhythm if rhythm else None
-
-    @property
-    def pitches(self):
-        return self.content.groups if isinstance(self.content, Pitches) else None
-
-    @property
-    def degrees(self):
-        return self.content.groups if isinstance(self.content, Degrees) else None
 
     def __eq__(self, other):
         return (isinstance(other, Idea)
@@ -55,13 +45,11 @@ class Idea:
 
     def __repr__(self):
         """The expression that builds this idea, e.g.
-        pitches('c4 d4 e4') * rhythm('4 r4 |: 8'). Long ideas are cut short with
+        degrees('1 3 5') * rhythm('4 r4 |: 8'). Long ideas are cut short with
         '…' (those reprs are for reading, not for eval)."""
         parts = []
-        if self.pitches is not None:
-            parts.append(f"pitches('{format_pitches(self.pitches, _REPR_GROUPS)}')")
-        elif self.degrees is not None:
-            parts.append(f"degrees('{format_degrees(self.degrees, _REPR_GROUPS)}')")
+        if self.content is not None:
+            parts.append(f"degrees('{format_degrees(self.content.groups, _REPR_GROUPS)}')")
         if self.rhythm is not None:
             parts.append(f"rhythm('{format_rhythm(self.rhythm, _REPR_RHYTHM_TOKENS)}')")
         return ' * '.join(parts) if parts else 'Idea()'
@@ -93,10 +81,8 @@ class Idea:
             content = other.content
         elif other.content is None:
             content = self.content
-        elif isinstance(self.content, Degrees) and isinstance(other.content, Degrees):
-            content = self.content.stack(other.content)
         else:
-            raise SyntaxError("Cannot stack ideas that don't have degrees")
+            content = self.content.stack(other.content)
 
         if self.rhythm:
             one_pass = [(rest, duration) for rest, _, duration in self._realize()]
@@ -120,7 +106,7 @@ class Idea:
             for _ in range(count - 1):
                 result = result + self
             return result
-        content = type(self.content)(self.content.groups * count)
+        content = Degrees(self.content.groups * count)
         if self.rhythm is None:
             return Idea(content)
         one_pass = [(rest, duration) for rest, _, duration in self._realize()]
@@ -148,10 +134,8 @@ class Idea:
                               'rhythm-only idea; use * to layer a rhythm onto notes')
         if self.content is None:
             content = None
-        elif type(self.content) is not type(other.content):
-            raise SyntaxError('Cannot concatenate pitches with degrees')
         else:
-            content = type(self.content)(self.content.groups + other.content.groups)
+            content = Degrees(self.content.groups + other.content.groups)
         return Idea(content, self._joined_rhythm(other))
 
     def _joined_rhythm(self, other):
@@ -166,31 +150,19 @@ class Idea:
 
     # ----------------------------------------------------------- resolving
 
-    def against(self, palette, strict=False):
-        """Pour this idea through `palette`: degrees become pitches and pitches
-        become degrees. The rhythm is carried along unchanged. `strict` only
-        matters for pitches -> degrees (see Palette.degree_of)."""
-        if not isinstance(palette, Palette):
-            raise SyntaxError(f'Cannot resolve against {palette!r}: expected a Palette')
-        if self.content is None:
-            raise SyntaxError('A rhythm-only idea has nothing to resolve against a palette')
-        return Idea(content=self.content.against(palette, strict), rhythm=self.rhythm)
-
     def __rshift__(self, palette):
-        return self.as_pitches(palette)
+        if self.content is None:
+            raise SyntaxError('A rhythm-only idea has nothing to resolve')
+        content = self.content.compose(palette.content if isinstance(palette, Idea)
+                                       else palette)
+        return Idea(content, self.rhythm)
 
     def __lshift__(self, palette):
-        return self.as_degrees(palette)
-
-    def as_pitches(self, palette):
-        if not isinstance(self.content, Degrees):
-            raise SyntaxError('An idea without degrees has no pitches to resolve')
-        return self.against(palette)
-
-    def as_degrees(self, palette, strict=False):
-        if not isinstance(self.content, Pitches):
-            raise SyntaxError('An idea without pitches has no degrees to analyze')
-        return self.against(palette, strict)
+        if self.content is None:
+            raise SyntaxError('A rhythm-only idea has nothing to resolve')
+        content = self.content.decompose(palette.content if isinstance(palette, Idea)
+                                         else palette)
+        return Idea(content, self.rhythm)
 
     # ------------------------------------------------------------- display
 
@@ -224,7 +196,7 @@ class Idea:
             steps, loop_start = rhythm_steps(self.rhythm)
         else:
             steps, loop_start = [(False, WHOLE)], 0
-        groups = self.content.groups if self.content is not None else None
+        groups = self.content.pitch() if self.content is not None else None
         if not groups:
             return [(rest, None, duration) for rest, duration in steps]
         if all(rest for rest, _ in steps[loop_start:]):
@@ -250,14 +222,14 @@ class Idea:
 
     def events(self):
         """[(group, duration)] ready for rendering; a rest has an empty group."""
-        if isinstance(self.content, Degrees):
-            raise SyntaxError('Resolve degrees to pitches before asking for events')
         return [([] if group is None else group, duration)
                 for _, group, duration in self._realize()]
 
 
 def pitches(text):
-    return Idea(Pitches(parse_pitches(text)))
+    groups = [[(pitch.idx + 1, pitch.acc) for pitch in group]
+              for group in parse_pitches(text)]
+    return Idea(Degrees(groups))
 
 def degrees(text):
     return Idea(Degrees(parse_degrees(text)))
