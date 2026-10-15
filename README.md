@@ -49,7 +49,8 @@ operator combine ideas, tightest first:
 ```
 *       builds:     rhythm * degrees layers a rhythm onto notes;
                     degrees * degrees stacks; idea * 3 repeats.
-+       sequences:  a + b plays a, then b.
++       sequences:  a + b plays a, then b; a + pitch transposes up,
+                    a - pitch transposes down.
 >> <<   resolves:   degrees >> palette selects/resolves through a palette;
                     notes << palette recovers their degrees.
 ```

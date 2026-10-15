@@ -58,6 +58,8 @@ class Pitch:
         return f"Pitch('{self.__str__()}')"
 
     def __add__(self, other: Pitch):
+        if not isinstance(other, Pitch):
+            return NotImplemented
         result = Pitch()
         result.idx = self.idx + other.idx
         result.acc = self._normpitch() + other._normpitch() - result._normpitch()
