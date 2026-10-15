@@ -62,6 +62,17 @@ degrees('1 2') + degrees('5')              # 1 2 5
 degrees('1 2') * 3                         # 1 2 1 2 1 2
 ```
 
+An idea also transposes, by a degree or a string like `'4#'` / `'-4#'` (the minus
+goes down), through a plane. The accidental is whatever the plane's values leave
+over, so with the default plane (the white keys, whose degrees are semitones) it is
+exactly adding a `Pitch`; pass another `Degrees` to measure in a different plane:
+
+```python
+pitches('c4 e4 g4').transpose('4#')                          # f#4 a#4 c#5
+pitches('c4 e4 g4').transpose('-4#')                         # gb3 bb3 db4
+pitches('c4 e4 g4').transpose('3', Degrees(parse_degrees('0 2 3 5 7 8 10 12')))  # e4 gb4 b4
+```
+
 ## Degrees and palettes
 
 There is one content type, `Degrees`: a list of groups, each group one note or a chord of
@@ -137,6 +148,7 @@ notes break runs, and beams never cross a barline.
 | `rhythm(text)` | Parses `4 8 r4 \|: 16` into a rhythm-only `Idea`. |
 | `idea * other` | Layer a rhythm onto notes, stack degrees, or repeat by an int. |
 | `idea + other` | Play this idea, then `other`. |
+| `idea.transpose(interval, palette=None)` | Move every note by a degree (or `'4#'`/`'-4#'`) through a plane (the white keys by default). |
 | `idea >> palette` | Compose/select/resolve degrees through a palette (an `Idea` or `Degrees`). |
 | `idea << palette` | Recover the degrees of pitches in a palette. |
 | `Degrees(groups)` | The one content type: groups of `(number, accidental)`. |

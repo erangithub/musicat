@@ -287,6 +287,51 @@ def test_concat_before_resolving():
     assert ev(phrase) == [('c4', F(1, 4)), ('d4', F(1, 4)), ('g4', F(1, 2))]
 
 
+# ----------------------------------------------------- transpose: planes
+
+def test_transpose_matches_adding_a_pitch():
+    m = pitches('c4 e4 g4')
+    assert m.transpose('4#') == m + Pitch('f#', 0)
+    assert m.transpose('3b') == m + Pitch('eb', 0)
+    assert m.transpose('8') == m + Pitch('c', 1)
+    assert m.transpose('7b') == m + Pitch('bb', 0)
+
+
+def test_transpose_string_goes_down_with_a_minus():
+    m = pitches('c4 e4 g4')
+    assert names(m.transpose('4#')) == [['f#4'], ['a#4'], ['c#5']]
+    assert names(m.transpose('-4#')) == [['gb3'], ['bb3'], ['db4']]
+    assert m.transpose('-4#') == m - Pitch('f#', 0)
+    assert m.transpose('1') == m and m.transpose('-1') == m     # a unison moves nothing
+
+
+def test_transpose_accepts_a_tuple_or_degrees():
+    m = pitches('c4')
+    assert m.transpose((4, 1)) == m.transpose('4#')
+    assert m.transpose(degrees('4#').content) == m.transpose('4#')
+
+
+def test_transpose_through_another_plane():
+    m = pitches('c4 e4 g4')
+    d_major = degrees('2 4 6 7 9 11 13 14').content   # d major, measured from c
+    minor = degrees('0 2 3 5 7 8 10 12').content       # a minor third on degree 3
+    assert m.transpose('3', d_major) == m.transpose('3')    # a major plane agrees
+    assert names(m.transpose('3', minor)) == [['e4'], ['gb4'], ['b4']]
+    lifted = m.transpose('4#', minor)                       # and is invertible
+    assert lifted.transpose('-4#', minor) == m
+    with pytest.raises(SyntaxError, match='expected degrees'):   # a plane is a Degrees
+        m.transpose('3', degrees('1 2 3'))
+
+
+def test_transpose_keeps_rhythm_and_needs_notes():
+    r = degrees('1 2') * rhythm('4 8')
+    assert r.transpose('2').rhythm == r.rhythm
+    with pytest.raises(SyntaxError, match='nothing to transpose'):
+        rhythm('4').transpose('2')
+    with pytest.raises(SyntaxError, match='Illegal degree'):
+        pitches('c').transpose('1 2')
+
+
 # -------------------------------------------------------- events / looping
 
 def test_events_plain_pitches_default_whole_notes():
@@ -384,13 +429,11 @@ def test_strict():
         pitches('f4').content.decompose(PALETTES['pentatonic'], strict=True)
 
 
-def test_no_letter_match_falls_back_to_nearest_sound():
+def test_no_letter_match_raises():
     p = PALETTES['pentatonic']          # c d e g a: no f, no b
     for text in ('f4', 'b4', 'f#4', 'bb3'):
-        idea = pitches(text)
-        back = (idea << p) >> p
-        assert back.content.pitch()[0][0].midipitch() == \
-            idea.content.pitch()[0][0].midipitch()
+        with pytest.raises(SyntaxError, match='not in the palette'):
+            pitches(text) << p
 
 
 @pytest.mark.parametrize('name', PALETTES)
@@ -398,7 +441,7 @@ def test_pitches_roundtrip_is_exact_when_letters_match(name):
     p = PALETTES[name]
     for degree in range(-25, 40):
         for acc in (-1, 0, 1):
-            original = Idea(Degrees([[p._at(degree, acc)]]))
+            original = Idea(Degrees([[p._at((degree, acc))]]))
             assert (original << p) >> p == original, (name, degree, acc)
 
 
@@ -536,9 +579,9 @@ def test_repr_roundtrips_every_pitch_the_palettes_make(name):
     p = PALETTES[name]
     for degree in range(-15, 25):
         for acc in (-2, -1, 0, 1, 2):
-            single = Idea(Degrees([[p._at(degree, acc)]]))
+            single = Idea(Degrees([[p._at((degree, acc))]]))
             assert roundtrips(single), (name, degree, acc, repr(single))
-    chord = Idea(Degrees([[p._at(d, a) for d in (-3, 1, 4, 9)] for a in (-1, 0, 1)]))
+    chord = Idea(Degrees([[p._at((d, a)) for d in (-3, 1, 4, 9)] for a in (-1, 0, 1)]))
     assert roundtrips(chord)
 
 

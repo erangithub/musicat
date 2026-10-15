@@ -28,6 +28,9 @@ class Idea:
 
         rhythm('8') * degrees('1 2 3') * degrees('0 1 2 3') >> degrees('d4 f a')
 
+    `transpose(interval, palette)` moves every note by a degree, or a string like
+    '4#' / '-4#', through a plane (the white keys by default, or another palette).
+
     A rhythm loops over the content: with no loop marker the whole rhythm
     repeats, and '|:' marks where the repeating part starts ('4 |: 8' is a
     quarter and then eighths forever).
@@ -113,6 +116,19 @@ class Idea:
         one_pass = [(rest, duration) for rest, _, duration in self._realize()]
         return Idea(content, rhythm_from_steps(one_pass, 0))
 
+    def transpose(self, interval, palette=None):
+        """Move every note by a degree `interval` through a plane.
+
+        `interval` is a (number, accidental) degree, a one-note Degrees, or a
+        string in the degrees syntax ('4#' is up a sharp fourth, '-4#' down
+        one). The plane is the white keys by default, so this is exactly adding
+        a `Pitch`; pass another palette (a Degrees) to measure in a different
+        plane. Rhythms are kept as they are.
+        """
+        if self.content is None:
+            raise SyntaxError('A rhythm-only idea has nothing to transpose')
+        return Idea(self.content.transpose(interval, palette), self.rhythm)
+
     # ---------------------------------------------------------- sequencing
 
     def __add__(self, other):
@@ -130,19 +146,7 @@ class Idea:
         continues over the notes of `other`. If neither does, none is invented.
         """
         if isinstance(other, Pitch):
-            if self.content is None:
-                raise SyntaxError('A rhythm-only idea has nothing to transpose')
-            groups = []
-            for group in self.content.groups:
-                notes = []
-                for number, acc in group:
-                    pitch = Pitch()
-                    pitch.idx = number - 1
-                    pitch.acc = acc
-                    moved = pitch + other
-                    notes.append((moved.idx + 1, moved.acc))
-                groups.append(notes)
-            return Idea(Degrees(groups), self.rhythm)
+            return self.transpose((other.idx + 1, other.acc))
         if not isinstance(other, Idea):
             raise SyntaxError(f'Illegal operand {other!r}')
         if self._is_empty():
