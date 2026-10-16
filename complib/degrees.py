@@ -5,6 +5,10 @@ from .pitches import Pitch
 
 Degree = tuple[int, int]
 
+# degree 1 is c4 (middle C), matching Pitch's default octave, so plain
+# degrees need no transposition to sit in the usual range
+ORIGIN = 7 * 4
+
 
 def _parse_degree(text):
     degree = re.fullmatch(r'(-?\d+)(b+|#+)?', text)
@@ -303,7 +307,7 @@ class Degrees:
             notes = []
             for number, acc in group:
                 pitch = Pitch()
-                pitch.idx = number - 1
+                pitch.idx = number - 1 + ORIGIN
                 pitch.acc = acc
                 notes.append(pitch)
             result.append(notes)
@@ -320,7 +324,7 @@ def major_scale(root_str):
     names = ('c', 'd', 'e', 'f', 'g', 'a', 'b')
     notes = [root + Pitch(name, 0) for name in names]
     notes.append(root + Pitch('c', 1))            # close the octave (the period marker)
-    return Degrees([[(pitch.idx + 1, pitch.acc)] for pitch in notes])
+    return Degrees([[(pitch.idx + 1 - ORIGIN, pitch.acc)] for pitch in notes])
 
 
 def minor_scale(root_str):
@@ -328,7 +332,7 @@ def minor_scale(root_str):
     names = ('c', 'd', 'eb', 'f', 'g', 'ab', 'bb')
     notes = [root + Pitch(name, 0) for name in names]
     notes.append(root + Pitch('c', 1))            # close the octave (the period marker)
-    return Degrees([[(pitch.idx + 1, pitch.acc)] for pitch in notes])
+    return Degrees([[(pitch.idx + 1 - ORIGIN, pitch.acc)] for pitch in notes])
 
 
 # the plane transpose measures through by default: the white keys, whose degrees

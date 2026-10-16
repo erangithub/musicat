@@ -1,6 +1,6 @@
 from .errors import SyntaxError
 from .pitches import parse_pitches, Pitch
-from .degrees import parse_degrees, format_degrees, Degrees
+from .degrees import parse_degrees, format_degrees, Degrees, ORIGIN
 from .rhythm import (parse_rhythm, format_rhythm, rhythm_steps,
                      rhythm_from_steps, WHOLE)
 
@@ -261,7 +261,7 @@ class Idea:
 
 
 def pitches(text):
-    groups = [[(pitch.idx + 1, pitch.acc) for pitch in group]
+    groups = [[(pitch.idx + 1 - ORIGIN, pitch.acc) for pitch in group]
               for group in parse_pitches(text)]
     return Idea(Degrees(groups))
 

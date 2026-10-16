@@ -79,7 +79,7 @@ def test_rhythm_steps_roundtrip():
 def test_slots_and_compat_properties():
     i = pitches('c d') * rhythm('4')
     assert isinstance(i.content, Degrees)
-    assert i.content.groups == [[(29, 0)], [(30, 0)]] and i.rhythm == [F(1, 4)]
+    assert i.content.groups == [[(1, 0)], [(2, 0)]] and i.rhythm == [F(1, 4)]
     d = degrees('1 2')
     assert isinstance(d.content, Degrees)
     assert d.content.groups == [[(1, 0)], [(2, 0)]]
@@ -94,7 +94,7 @@ def test_cannot_hold_both_by_construction():
 def test_equality_and_repr():
     assert degrees('1 2') == degrees('1 2')
     assert degrees('1 2') != degrees('1 3')
-    assert degrees('1') != pitches('c')
+    assert degrees('1') == pitches('c')                    # degree 1 is c4
     assert len(degrees('1 2 3')) == 3 and len(Idea()) == 0
     assert Idea(rhythm=[]) == Idea()                       # empty rhythm is no rhythm
 
@@ -384,8 +384,8 @@ def test_events_loop_without_sounding_step_raises_not_hangs(text):
 
 
 def test_events_degrees_resolve_through_the_base():
-    # with no palette a degree is the base note (1 is c0)
-    assert ev(degrees('1 2') * rhythm('4')) == [('c0', F(1, 4)), ('d0', F(1, 4))]
+    # with no palette a degree is the base note (1 is c4)
+    assert ev(degrees('1 2') * rhythm('4')) == [('c4', F(1, 4)), ('d4', F(1, 4))]
 
 
 def test_part_accepts_degrees():
@@ -515,22 +515,22 @@ def roundtrips(idea):
 
 
 def test_repr_reads_like_the_expression_that_builds_it():
-    assert repr(pitches('c d e')) == "degrees('29 30 31')"
+    assert repr(pitches('c d e')) == "degrees('1 2 3')"
     assert repr(degrees('1 2 3')) == "degrees('1 2 3')"
     assert repr(rhythm('4 r4 |: 8')) == "rhythm('4 r4 |: 8')"
-    assert repr(pitches('c d') * rhythm('4')) == "degrees('29 30') * rhythm('4')"
+    assert repr(pitches('c d') * rhythm('4')) == "degrees('1 2') * rhythm('4')"
     assert repr(degrees('<1 3 5> 2#') * rhythm('2')) == "degrees('<1 3 5> 2#') * rhythm('2')"
     assert repr(Idea()) == 'Idea()'
 
 
 def test_repr_shows_the_loop_marker_that_plus_inserts():
     r = pitches('c d') * rhythm('4 8') + pitches('e') * rhythm('2 |: 16')
-    assert repr(r) == "degrees('29 30 31') * rhythm('4 8 2 |: 16')"
+    assert repr(r) == "degrees('1 2 3') * rhythm('4 8 2 |: 16')"
 
 
 def test_repr_of_a_repeated_idea_stays_compact():
     r = pitches('c d') * rhythm('4 8') * 2
-    assert repr(r) == "degrees('29 30 29 30') * rhythm('4 8')"
+    assert repr(r) == "degrees('1 2 1 2') * rhythm('4 8')"
 
 
 def test_repr_prefers_dotted_durations():

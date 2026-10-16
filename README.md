@@ -76,13 +76,13 @@ pitches('c4 e4 g4').transpose('3', Degrees(parse_degrees('0 2 3 5 7 8 10 12'))) 
 ## Degrees and palettes
 
 There is one content type, `Degrees`: a list of groups, each group one note or a chord of
-`(number, accidental)`. Numbers are absolute over the 7-letter base — `c0` is `1`, `b0` is `7`,
-`c1` is `8` — so the plain letters are the identity palette. `pitches(text)` parses letter names into
-the same type as input sugar:
+`(number, accidental)`. Numbers are relative to the 7-letter base with `c4` (middle C) as `1`, so
+`b4` is `7`, `c5` is `8` and notes below `c4` go negative; the plain letters are the identity palette.
+`pitches(text)` parses letter names into the same type as input sugar:
 
 ```python
-degrees('1 3 5')            # Degrees('1 3 5')
-pitches('c4 e4 g4')         # degrees('29 31 33')  (the same thing)
+degrees('1 3 5')            # Degrees('1 3 5')  = c4 e4 g4
+pitches('c4 e4 g4')         # degrees('1 3 5')  (the same thing)
 pitches('c4').content.pitch()   # [[Pitch('c4')]]  materialise the I/O value
 ```
 
@@ -105,7 +105,7 @@ A single-note palette has period zero and just returns that note.
 octave so the period is one octave:
 
 ```python
-major_scale('f')            # Degrees('32 33 34 35b 36 37 38 39')  = f4 g4 a4 bb4 c5 d5 e5 f5
+major_scale('f')            # Degrees('4 5 6 7b 8 9 10 11')  = f4 g4 a4 bb4 c5 d5 e5 f5
 ```
 
 ## Rhythm and events
@@ -116,7 +116,7 @@ and `r` prefixes a rest (`'r4'`). `_realize`/`events()` unroll an idea into `(pi
 pairs, which is what rendering consumes:
 
 ```python
-(degrees('1 2 3') * rhythm('4 8')).events()   # [(c0, 1/4), (d0, 1/8), (e0, 1/4)]
+(degrees('1 2 3') * rhythm('4 8')).events()   # [(c4, 1/4), (d4, 1/8), (e4, 1/4)]
 ```
 
 ## Scores and rendering
