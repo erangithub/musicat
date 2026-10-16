@@ -1,6 +1,6 @@
 from .errors import SyntaxError
-from .pitches import parse_pitches, Pitch
-from .degrees import parse_degrees, format_degrees, Degrees, ORIGIN
+from .pitches import parse_pitches
+from .degrees import parse_degrees, format_degrees, Degrees
 from .rhythm import (parse_rhythm, format_rhythm, rhythm_steps,
                      rhythm_from_steps, WHOLE)
 
@@ -21,8 +21,7 @@ class Idea:
 
       *       builds:     rhythm * degrees layers a rhythm onto notes,
                           degrees * degrees stacks, idea * 3 repeats.
-      +       sequences:  a + b plays a, then b; a + pitch transposes up,
-                          a - pitch transposes down.
+      +       sequences:  a + b plays a, then b.
       >> <<   resolves:   degrees >> palette selects/resolves through a palette,
                           notes << palette asks for their degrees.
 
@@ -121,9 +120,8 @@ class Idea:
 
         `interval` is a (number, accidental) degree, a one-note Degrees, or a
         string in the degrees syntax ('4#' is up a sharp fourth, '-4#' down
-        one). The plane is the white keys by default, so this is exactly adding
-        a `Pitch`; pass another palette (a Degrees) to measure in a different
-        plane. Rhythms are kept as they are.
+        one). The plane is the white keys by default; pass another palette (a
+        Degrees) to measure in a different plane. Rhythms are kept as they are.
         """
         if self.content is None:
             raise SyntaxError('A rhythm-only idea has nothing to transpose')
@@ -132,12 +130,7 @@ class Idea:
     # ---------------------------------------------------------- sequencing
 
     def __add__(self, other):
-        """Play this idea, then `other`; adding a Pitch transposes the idea.
-
-        A Pitch interval is added to every note with the same pitch arithmetic
-        as `Pitch + Pitch` (so accidentals stay sound-correct). The interval's
-        octave counts, so `Pitch('c', 1)` is up an octave and `Pitch('eb', 0)`
-        is up a minor third.
+        """Play this idea, then `other`.
 
         If both have a rhythm, this idea's rhythm is unrolled over its own
         notes (trailing rests included) and then `other`'s rhythm follows,
@@ -145,8 +138,6 @@ class Idea:
         each take its first duration. If only this idea has one, it simply
         continues over the notes of `other`. If neither does, none is invented.
         """
-        if isinstance(other, Pitch):
-            return self.transpose((other.idx + 1, other.acc))
         if not isinstance(other, Idea):
             raise SyntaxError(f'Illegal operand {other!r}')
         if self._is_empty():
@@ -161,16 +152,6 @@ class Idea:
         else:
             content = Degrees(self.content.groups + other.content.groups)
         return Idea(content, self._joined_rhythm(other))
-
-    def __radd__(self, other):
-        if isinstance(other, Pitch):
-            return self.__add__(other)
-        return NotImplemented
-
-    def __sub__(self, other):
-        if isinstance(other, Pitch):
-            return self.__add__(-other)
-        return NotImplemented
 
     def _joined_rhythm(self, other):
         if other.rhythm is None:
@@ -230,7 +211,7 @@ class Idea:
             steps, loop_start = rhythm_steps(self.rhythm)
         else:
             steps, loop_start = [(False, WHOLE)], 0
-        groups = self.content.pitch() if self.content is not None else None
+        groups = self.content.groups if self.content is not None else None
         if not groups:
             return [(rest, None, duration) for rest, duration in steps]
         if all(rest for rest, _ in steps[loop_start:]):
@@ -261,9 +242,7 @@ class Idea:
 
 
 def pitches(text):
-    groups = [[(pitch.idx + 1 - ORIGIN, pitch.acc) for pitch in group]
-              for group in parse_pitches(text)]
-    return Idea(Degrees(groups))
+    return Idea(parse_pitches(text))
 
 def degrees(text):
     return Idea(Degrees(parse_degrees(text)))

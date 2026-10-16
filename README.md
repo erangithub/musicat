@@ -49,8 +49,7 @@ operator combine ideas, tightest first:
 ```
 *       builds:     rhythm * degrees layers a rhythm onto notes;
                     degrees * degrees stacks; idea * 3 repeats.
-+       sequences:  a + b plays a, then b; a + pitch transposes up,
-                    a - pitch transposes down.
++       sequences:  a + b plays a, then b.
 >> <<   resolves:   degrees >> palette selects/resolves through a palette;
                     notes << palette recovers their degrees.
 ```
@@ -64,8 +63,8 @@ degrees('1 2') * 3                         # 1 2 1 2 1 2
 
 An idea also transposes, by a degree or a string like `'4#'` / `'-4#'` (the minus
 goes down), through a plane. The accidental is whatever the plane's values leave
-over, so with the default plane (the white keys, whose degrees are semitones) it is
-exactly adding a `Pitch`; pass another `Degrees` to measure in a different plane:
+over; with the default plane (the white keys, whose degrees are semitones) a sharp
+fourth above `c4` is `f#4`. Pass another `Degrees` to measure in a different plane:
 
 ```python
 pitches('c4 e4 g4').transpose('4#')                          # f#4 a#4 c#5
@@ -83,7 +82,7 @@ There is one content type, `Degrees`: a list of groups, each group one note or a
 ```python
 degrees('1 3 5')            # Degrees('1 3 5')  = c4 e4 g4
 pitches('c4 e4 g4')         # degrees('1 3 5')  (the same thing)
-pitches('c4').content.pitch()   # [[Pitch('c4')]]  materialise the I/O value
+format_pitches(pitches('c4 e4 g4').content.groups)  # 'c4 e4 g4'  back to letter names
 ```
 
 A palette is just another `Idea`/`Degrees`, so `>>` composes degrees through it and `<<` is the
@@ -153,9 +152,8 @@ notes break runs, and beams never cross a barline.
 | `idea << palette` | Recover the degrees of pitches in a palette. |
 | `Degrees(groups)` | The one content type: groups of `(number, accidental)`. |
 | `Degrees.compose(other)` / `.decompose(other, strict=False)` | The two directions of `>>` / `<<`. |
-| `Degrees.pitch()` | Materialise as groups of `Pitch` (the I/O value). |
+| `parse_pitches(text)` / `format_pitches(groups)` | The letter language either way: names to degrees, degrees to names. |
 | `major_scale(root)` / `minor_scale(root)` | The scale as `Degrees`. |
-| `Pitch(name)` | Parses `c`, `f#`, `bb3`, `c-1`; `midipitch()` is the MIDI number. |
 | `Event`/`Sequence` model | Replaced by `Idea`; `events()` unrolls one into `(group, duration)` pairs. |
 | `Part(idea, name='Music')` | One staff of a score. |
 | `Score(parts, time='4/4')` | A list of `Part`s and the time signature, written `'6/8'`. |

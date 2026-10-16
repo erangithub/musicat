@@ -1,7 +1,7 @@
 import pytest
 from fractions import Fraction as F
 
-from complib import (Idea, Pitch, Degrees, Part, SyntaxError,
+from complib import (Idea, Degrees, Part, SyntaxError, format_pitches,
                      degrees, major_scale, minor_scale, pitches, rhythm)
 from complib.rhythm import (LOOP_MARKER, REST_MARKER, parse_rhythm,
                             rhythm_from_steps, rhythm_steps)
@@ -19,12 +19,12 @@ PALETTES = {
 
 def names(idea):
     """Idea -> list of lists of strings, for readable asserts."""
-    return [[str(p) for p in group] for group in idea.content.pitch()]
+    return [[format_pitches([[note]]) for note in group] for group in idea.content.groups]
 
 
 def ev(idea):
     """events() as [(note-or-'rest', duration)], first note of each group."""
-    return [('rest' if not g else str(g[0]), d) for g, d in idea.events()]
+    return [('rest' if not g else format_pitches([[g[0]]]), d) for g, d in idea.events()]
 
 
 def durations(idea):
@@ -88,7 +88,7 @@ def test_slots_and_compat_properties():
 
 def test_cannot_hold_both_by_construction():
     with pytest.raises(SyntaxError):
-        Idea(content=[[Pitch('c')]])          # raw lists are not content
+        Idea(content=[[(1, 0)]])                   # raw lists are not content
 
 
 def test_equality_and_repr():
@@ -289,19 +289,10 @@ def test_concat_before_resolving():
 
 # ----------------------------------------------------- transpose: planes
 
-def test_transpose_matches_adding_a_pitch():
-    m = pitches('c4 e4 g4')
-    assert m.transpose('4#') == m + Pitch('f#', 0)
-    assert m.transpose('3b') == m + Pitch('eb', 0)
-    assert m.transpose('8') == m + Pitch('c', 1)
-    assert m.transpose('7b') == m + Pitch('bb', 0)
-
-
 def test_transpose_string_goes_down_with_a_minus():
     m = pitches('c4 e4 g4')
     assert names(m.transpose('4#')) == [['f#4'], ['a#4'], ['c#5']]
     assert names(m.transpose('-4#')) == [['gb3'], ['bb3'], ['db4']]
-    assert m.transpose('-4#') == m - Pitch('f#', 0)
     assert m.transpose('1') == m and m.transpose('-1') == m     # a unison moves nothing
 
 

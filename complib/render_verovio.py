@@ -2,6 +2,7 @@ from fractions import Fraction
 from math import lcm
 
 from .errors import SyntaxError
+from .pitches import LETTERS, ORIGIN
 from .rhythm import EIGHTH, HALF, QUARTER, SIXTEENTH, THIRTY_SECOND, WHOLE
 from .score import Part, Score
 
@@ -109,15 +110,14 @@ def show_score(score: Score):
                         f'<type>{name}</type>{dots_xml}{tuplet_xml}</note>')
             else:
                 body = ''
-                for i, pitch in enumerate(group):
-                    symbol = acc_map[pitch.accidental()]
-                    alter = pitch.acc
+                for i, (number, alter) in enumerate(group):
+                    run = '#' * alter if alter > 0 else 'b' * -alter
+                    symbol = acc_map[run]
                     acc = f'<accidental>{symbol}</accidental>' if symbol else ''
                     alt = f'<alter>{alter}</alter>' if alter else ''
-                    octave = pitch.octave()
                     body += ('<note><chord/>' if i else '<note>') + (
-                        f'<pitch><step>{pitch.root().upper()}</step>{alt}'
-                        f'<octave>{octave}</octave></pitch>'
+                        f'<pitch><step>{LETTERS[(number - 1) % 7].upper()}</step>{alt}'
+                        f'<octave>{(number - 1) // 7 + ORIGIN // 7}</octave></pitch>'
                         f'<duration>{ticks}</duration><voice>1</voice>'
                         f'<type>{name}</type>{dots_xml}{acc}{tuplet_xml}</note>')
             if notes and filled + ticks > bar_ticks:

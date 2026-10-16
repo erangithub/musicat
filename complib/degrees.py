@@ -1,13 +1,8 @@
 import re
 
 from .errors import SyntaxError
-from .pitches import Pitch
 
 Degree = tuple[int, int]
-
-# degree 1 is c4 (middle C), matching Pitch's default octave, so plain
-# degrees need no transposition to sit in the usual range
-ORIGIN = 7 * 4
 
 
 def _parse_degree(text):
@@ -188,9 +183,9 @@ class Degrees:
 
         Spelling is preserved: a degree is chosen whose letter matches. If the
         palette has several such degrees the one needing the smallest accidental
-        wins, then the lowest degree. If no degree shares the letter the nearest
-        degree by sound is used (round-tripping the sound, not the spelling).
-        With strict=True a note that is not exactly a palette note raises.
+        wins, then the lowest degree. A note sharing no letter with the palette
+        has no degree, and with strict=True a note that is not exactly a palette
+        note raises.
         """
         notes = self._flat()
         if not notes:
@@ -300,39 +295,11 @@ class Degrees:
             groups.append(notes)
         return Degrees(groups)
 
-    def pitch(self):
-        """These degrees as concrete pitches (the I/O value), groups kept."""
-        result = []
-        for group in self.groups:
-            notes = []
-            for number, acc in group:
-                pitch = Pitch()
-                pitch.idx = number - 1 + ORIGIN
-                pitch.acc = acc
-                notes.append(pitch)
-            result.append(notes)
-        return result
-
     def __rshift__(self, other):
         return self.compose(other)
 
     def __lshift__(self, other):
         return self.decompose(other)
-
-def major_scale(root_str):
-    root = Pitch(root_str)
-    names = ('c', 'd', 'e', 'f', 'g', 'a', 'b')
-    notes = [root + Pitch(name, 0) for name in names]
-    notes.append(root + Pitch('c', 1))            # close the octave (the period marker)
-    return Degrees([[(pitch.idx + 1 - ORIGIN, pitch.acc)] for pitch in notes])
-
-
-def minor_scale(root_str):
-    root = Pitch(root_str)
-    names = ('c', 'd', 'eb', 'f', 'g', 'ab', 'bb')
-    notes = [root + Pitch(name, 0) for name in names]
-    notes.append(root + Pitch('c', 1))            # close the octave (the period marker)
-    return Degrees([[(pitch.idx + 1 - ORIGIN, pitch.acc)] for pitch in notes])
 
 
 # the plane transpose measures through by default: the white keys, whose degrees
