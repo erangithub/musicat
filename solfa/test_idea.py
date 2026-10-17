@@ -289,35 +289,43 @@ def test_concat_before_resolving():
 
 # -------------------------------------------------- transpose / diatonic
 
-def test_transpose_string_goes_down_with_a_minus():
+def test_transpose_counts_intervals_on_the_degree_line():
     m = pitches('c4 e4 g4')
     assert names(m.transpose('4#')) == [['f#4'], ['a#4'], ['c#5']]
-    assert names(m.transpose('-4#')) == [['gb3'], ['bb3'], ['db4']]
-    assert m.transpose('0') == m                                    # a unison moves nothing
-    assert m.transpose('1') == m and m.transpose('-1') == m
+    assert names(m.transpose('2')) == [['d4'], ['f#4'], ['a4']]       # a second up
+    assert m.transpose('1') == m                                      # the unison
+    assert names(m.transpose('0')) == [['b3'], ['d#4'], ['f#4']]      # a second down
+    assert names(m.transpose('-1')) == [['a3'], ['c#4'], ['e4']]      # a third down
 
 
-def test_transpose_accepts_a_tuple_or_degrees():
+def test_transpose_accepts_a_tuple():
     m = pitches('c4')
     assert m.transpose((4, 1)) == m.transpose('4#')
-    assert m.transpose(degrees('4#').content) == m.transpose('4#')
 
 
 def test_transpose_keeps_the_sounds():
-    assert names(pitches('c4').transpose('4')) == [['f4']]         # a fourth up
-    assert names(pitches('f4').transpose('4')) == [['bb4']]        # still a fourth
-    assert names(pitches('c4').transpose('-2')) == [['bb3']]       # a second down
+    assert names(pitches('c4').transpose('4')) == [['f4']]            # a fourth up
+    assert names(pitches('f4').transpose('4')) == [['bb4']]           # still a fourth
+    assert names(pitches('c4').transpose('0')) == [['b3']]            # a second down
+    assert names(pitches('c4').transpose('2', up=False)) == [['bb3']] # mirrored: a second down
+    m = pitches('c4 e4 g4')
+    assert names(m.transpose('2', up=False)) == [['bb3'], ['d4'], ['f4']]
+    assert names(m.transpose('-1', up=False)) == [['eb4'], ['g4'], ['bb4']]
 
 
 def test_diatonic_moves_letters_and_keeps_the_accidental():
     assert names(pitches('c4').diatonic(4)) == [['f4']]
-    assert names(pitches('f4').diatonic(4)) == [['b4']]            # letters, not sound
-    assert names(pitches('c4').diatonic(-2)) == [['b3']]
-    assert names(pitches('f#4').diatonic(4)) == [['b#4']]          # the sharp rides along
+    assert names(pitches('f4').diatonic(4)) == [['b4']]               # letters, not sound
+    assert names(pitches('c4').diatonic(0)) == [['b3']]               # a letter down
+    assert names(pitches('c4').diatonic(2, up=False)) == [['b3']]     # mirrored: a letter down
+    assert names(pitches('f#4').diatonic(4)) == [['b#4']]             # the sharp rides along
     m = pitches('c4 e4 g4')
-    assert m.diatonic('0') == m and m.diatonic('1') == m and m.diatonic('-1') == m
-    with pytest.raises(SyntaxError, match='whole letters'):        # no accidentals allowed
+    assert m.diatonic('1') == m                                       # the unison
+    with pytest.raises(SyntaxError, match='whole letters'):           # no accidentals allowed
         m.diatonic('4#')
+    # the scale constructors lean on diatonic; low roots must not overshoot
+    assert format_pitches(major_scale('b3').groups) == 'b3 c#4 d#4 e4 f#4 g#4 a#4 b4'
+    assert format_pitches(minor_scale('e3').groups) == 'e3 f#3 g3 a3 b3 c4 d4 e4'
 
 
 def test_transpose_keeps_rhythm_and_needs_notes():

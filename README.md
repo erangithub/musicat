@@ -61,15 +61,18 @@ degrees('1 2') + degrees('5')              # 1 2 5
 degrees('1 2') * 3                         # 1 2 1 2 1 2
 ```
 
-An idea also transposes, by a musical interval counted from 1 (so `0`, `1` and `-1`
-are all the unison, `2` is up a second, `-4` down a fourth). The interval keeps its
-*sound*, spelled through the white keys: a fourth above `f4` is `bb4`, not `b4`.
-`diatonic(interval)` instead moves by whole letter-steps, keeping each note's
-accidental: a fourth above `f4` is `b4`.
+An idea also transposes. An interval is a degree on the same number line as notes: `1`
+is the unison, `2` up a second, `0` down a second, `-1` down a third, `-2` down a fourth.
+`transpose(interval, up=False)` mirrors it around the
+unison, so `2` becomes down a second. The interval keeps its *sound*, spelled through the
+white keys: a fourth above `f4` is `bb4`, not `b4`. `diatonic(interval)` instead moves by
+whole letter-steps, keeping each note's accidental: a fourth above `f4` is `b4`.
 
 ```python
 pitches('c4 e4 g4').transpose('4#')     # f#4 a#4 c#5
-pitches('c4 e4 g4').transpose('-4#')    # gb3 bb3 db4
+pitches('c4 e4 g4').transpose('0')      # b3 d#4 f#4   (a second down)
+pitches('c4 e4 g4').transpose('-1')     # a3 c#4 e4    (a third down)
+pitches('c4').transpose('2', up=False)  # bb3          (a second down)
 pitches('f4').transpose('4')            # bb4  (a perfect fourth)
 pitches('f4').diatonic('4')             # b4   (the letter, not the sound)
 ```
@@ -149,8 +152,8 @@ notes break runs, and beams never cross a barline.
 | `rhythm(text)` | Parses `4 8 r4 \|: 16` into a rhythm-only `Idea`. |
 | `idea * other` | Layer a rhythm onto notes, stack degrees, or repeat by an int. |
 | `idea + other` | Play this idea, then `other`. |
-| `idea.transpose(interval)` | Move every note by a musical interval (`'4#'`/`'-4#'`), keeping its sound. |
-| `idea.diatonic(interval)` | Move every note by whole letter-steps, keeping its accidental. |
+| `idea.transpose(interval, up=True)` | Move every note by a musical interval (`'4#'`, `'0'`, `'-1'`), keeping its sound; `up=False` mirrors it. |
+| `idea.diatonic(interval, up=True)` | Move every note by whole letter-steps, keeping its accidental. |
 | `idea >> palette` | Compose/select/resolve degrees through a palette (an `Idea` or `Degrees`). |
 | `idea << palette` | Recover the degrees of pitches in a palette. |
 | `Degrees(groups)` | The one content type: groups of `(number, accidental)`. |

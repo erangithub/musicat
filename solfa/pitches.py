@@ -77,8 +77,7 @@ def major_scale(root_str):
     p, acc = parse_pitches(root_str).groups[0][0]
     letter = ((p - 1) % 7) + 1
     shift = 7 * ((p - 1) // 7)          # whole octaves down to the root's octave
-    step = shift + 1 if shift >= 0 else shift - 1
-    return Degrees(parse_degrees('1..8')).diatonic(step).transpose((letter, acc))
+    return Degrees(parse_degrees('1..8')).diatonic(shift + 1).transpose((letter, acc))
 
 
 def minor_scale(root_str):
@@ -86,5 +85,4 @@ def minor_scale(root_str):
     p, acc = parse_pitches(root_str).groups[0][0]
     letter = ((p - 1) % 7) + 1
     shift = 7 * ((p - 1) // 7)          # whole octaves down to the root's octave
-    step = shift + 1 if shift >= 0 else shift - 1
-    return Degrees(parse_degrees('1 2 3b 4 5 6b 7b 8')).diatonic(step).transpose((letter, acc))
+    return Degrees(parse_degrees('1 2 3b 4 5 6b 7b 8')).diatonic(shift + 1).transpose((letter, acc))

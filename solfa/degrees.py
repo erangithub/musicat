@@ -250,38 +250,28 @@ class Degrees:
         """Stack another degree pattern on top of this one (interval addition)."""
         return Degrees(stack_degrees(self.groups, other.groups))
 
-    def transpose(self, interval):
+    def transpose(self, interval, up=True):
         """Move every note by a musical interval, measured through the white keys.
 
-        `interval` is a degree: its magnitude is the interval number (1 the
-        unison, 2 a second, 3 a third, ...), its sign the direction, and an
-        accidental adjusts it in semitones. So '4' is up a fourth, '-4' down a
-        fourth, '4#' up a sharp fourth, and 0, 1 and -1 are all the unison.
+        `interval` is a degree, on the same number line as notes: 1 is the
+        unison, 2 up a second, 3 up a third, ..., and below the unison 0 is
+        down a second, -1 down a third, -2 down a fourth. An accidental adjusts
+        the interval in semitones, so '4#' is up a sharp fourth. `up=False`
+        mirrors the interval around the unison, so 2 is down a second.
 
         The interval keeps its sound, spelled through the white keys: f4 up a
         fourth is Bb4 (a perfect fourth), not B4.
         """
         if isinstance(interval, str):
-            text = interval.strip()
-            down = text.startswith('-')
-            step, acc = _parse_degree(text[1:] if down else text)
-            if down:
-                step = -step
-        elif isinstance(interval, Degrees):
-            flat = interval._flat()
-            if len(flat) != 1:
-                raise SyntaxError(f'An interval must be one degree, not {interval!r}')
-            step, acc = flat[0]
+            step, acc = _parse_degree(interval.strip())
         elif isinstance(interval, tuple) and len(interval) == 2:
             step, acc = interval
         else:
             raise SyntaxError(f'Illegal interval {interval!r}')
 
-        if step == 0:
-            return Degrees([list(group) for group in self.groups])
-        sign = 1 if step > 0 else -1
-        move = sign * (abs(step) - 1)
-        sound = sign * (white_keys._at((abs(step), 0))[0] + acc)
+        sign = 1 if up else -1
+        move = sign * (step - 1)
+        sound = sign * (white_keys._at((step, 0))[0] + acc)
         groups = []
         for group in self.groups:
             notes = []
@@ -292,11 +282,13 @@ class Degrees:
             groups.append(notes)
         return Degrees(groups)
 
-    def diatonic(self, interval):
+    def diatonic(self, interval, up=True):
         """Move every note by whole letter-steps, keeping its accidental.
 
-        `interval` counts letters, 1-based like `transpose`: 0, 1 and -1 are the
-        unison, 2 up a letter, -2 down a letter. Only whole steps are allowed.
+        `interval` counts letters on the same number line as `transpose`: 1 is
+        the unison, 2 up a letter, 0 down a letter, -1 down two letters.
+        `up=False` mirrors it, so 2 is down a letter. Only whole steps are
+        allowed.
         """
         if isinstance(interval, str):
             text = interval.strip()
@@ -307,7 +299,7 @@ class Degrees:
             step = interval
         else:
             raise SyntaxError(f'Illegal interval {interval!r}')
-        move = max(step - 1, 0) if step >= 0 else min(step + 1, 0)
+        move = step - 1 if up else 1 - step
         return Degrees([[(number + move, acc) for number, acc in group]
                         for group in self.groups])
 
