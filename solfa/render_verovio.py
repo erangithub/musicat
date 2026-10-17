@@ -10,7 +10,7 @@ from .score import Part, Score
 def show(musicxml=None):
     import verovio
     if musicxml is None:
-        with open('mock/probe.musicxml') as f:
+        with open('solfa/mock/probe.musicxml') as f:
             musicxml = f.read()
     toolkit = verovio.toolkit()
     toolkit.setOptions({'adjustPageHeight': True, 'scale': 40})

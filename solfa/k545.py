@@ -2,7 +2,7 @@
 
 Bars 1-8.
 """
-from complib import Idea, Part, Score, degrees, major_scale, pitches, rhythm
+from solfa import Idea, Part, Score, degrees, major_scale, pitches, rhythm
 
 C = major_scale('c')
 

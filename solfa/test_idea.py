@@ -1,9 +1,9 @@
 import pytest
 from fractions import Fraction as F
 
-from complib import (Idea, Degrees, Part, SyntaxError, format_pitches,
+from solfa import (Idea, Degrees, Part, SyntaxError, format_pitches,
                      degrees, major_scale, minor_scale, pitches, rhythm)
-from complib.rhythm import (LOOP_MARKER, REST_MARKER, parse_rhythm,
+from solfa.rhythm import (LOOP_MARKER, REST_MARKER, parse_rhythm,
                             rhythm_from_steps, rhythm_steps)
 
 SIXTH_DIM = pitches('c4 d e f g ab a b c5').content

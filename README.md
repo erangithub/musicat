@@ -1,4 +1,4 @@
-# complib
+# solfa
 
 A programmable library for composing music. Draft stage: an `Idea` is content (degrees) plus
 a rhythm, combined with operators, resolved through palettes, and rendered to notation via Verovio.
@@ -10,34 +10,34 @@ Create the virtualenv and install the dependencies (Python 3.14):
 ```
 python3 -m venv .venv
 .venv/bin/pip install verovio==6.2.1 jupyterlab ipykernel
-.venv/bin/python -m ipykernel install --user --name complib --display-name "Python (complib)"
+.venv/bin/python -m ipykernel install --user --name solfa --display-name "Python (solfa)"
 ```
 
-The last command registers the venv as a Jupyter kernel so notebooks can import `complib`. It writes to
-`~/Library/Jupyter/kernels/complib`; run it again after recreating the venv.
+The last command registers the venv as a Jupyter kernel so notebooks can import `solfa`. It writes to
+`~/Library/Jupyter/kernels/solfa`; run it again after recreating the venv.
 
 `verovio` is pinned to 6.2.1 because 6.3.0 publishes cp310 wheels only, and this venv is Python 3.14.
 
-## Running Jupyter Lab
+## Running Jupyter Notebook
 
 From the project directory:
 
 ```
-.venv/bin/jupyter lab
+.venv/bin/jupyter notebook
 ```
 
 Jupyter prints a URL (`http://localhost:8888/lab?token=...`) — open it in a browser. Notebook startup is slow
 the first time while JupyterLab builds its assets.
 
-In the notebook, pick the **Python (complib)** kernel from the kernel menu (right-hand corner of the toolbar, or
-`Kernel → Change Kernel`). Without it the notebook starts on a different interpreter and `import complib` fails.
+In the notebook, pick the **Python (solfa)** kernel from the kernel menu (right-hand corner of the toolbar, or
+`Kernel → Change Kernel`). Without it the notebook starts on a different interpreter and `import solfa` fails.
 
 Stop the server with `Ctrl-C`.
 
-## Using complib in a notebook
+## Using solfa in a notebook
 
 ```python
-from complib import degrees, pitches, rhythm, major_scale, show
+from solfa import degrees, pitches, rhythm, major_scale, show
 
 melody = degrees('1 2 3 1') * rhythm('4 4 4 2') >> major_scale('c')
 melody.show()                              # renders the line inline
@@ -126,7 +126,7 @@ A `Score` is a list of `Part`s plus a time signature written as a string. A `Par
 music (in MusicXML terms a *staff*, so a piano is two parts):
 
 ```python
-from complib import Part, Score
+from solfa import Part, Score
 
 score = Score([Part(melody, 'Flute'), Part(accomp, 'Piano RH')], '6/8')
 str(score)          # Flute, Piano RH in 6/8

@@ -10,8 +10,8 @@ from fractions import Fraction as F
 
 import pytest
 
-from complib import k545
-from complib.degrees import white_keys
+from solfa import k545
+from solfa.degrees import white_keys
 
 BARS = 8
 
