@@ -32,6 +32,11 @@ class Idea:
     1 the unison), and `up=False` mirrors it. `diatonic(interval)` moves by whole
     letter-steps instead, keeping each note's accidental.
 
+    `idea[i]` is that one event as a one-event idea, and `idea[a:b]` is a
+    shorter idea over that slice of the events — notes and rests in the order
+    they play — carrying the durations it actually plays, so the pieces
+    recombine with `+`.
+
     A rhythm loops over the content: with no loop marker the whole rhythm
     repeats, and '|:' marks where the repeating part starts ('4 |: 8' is a
     quarter and then eighths forever).
@@ -149,7 +154,11 @@ class Idea:
         notes (trailing rests included) and then `other`'s rhythm follows,
         loop marker and all. If only `other` has a rhythm, this idea's notes
         each take its first duration. If only this idea has one, it simply
-        continues over the notes of `other`. If neither does, none is invented.
+        continues over the notes of `other`; a rhythm of only rests has
+        nothing to continue over, so it sounds once and `other`'s notes then
+        take its first duration. If neither does, none is invented. A rhythm
+        that plays only rests carries no notes of its own, so it may be
+        concatenated with notes as silence.
         """
         if not isinstance(other, Idea):
             raise SyntaxError(f'Illegal operand {other!r}')
@@ -158,8 +167,17 @@ class Idea:
         if other._is_empty():
             return self
         if (self.content is None) != (other.content is None):
-            raise SyntaxError('Cannot concatenate an idea that has notes with a '
-                              'rhythm-only idea; use * to layer a rhythm onto notes')
+            # a rhythm that plays only rests carries no notes of its own, so it
+            # concatenates as silence; one with sounding steps is ambiguous
+            # with layering onto notes (use * for that)
+            silent = other if self.content is not None else self
+            if any(not rest for rest, _ in rhythm_steps(silent.rhythm)[0]):
+                raise SyntaxError('Cannot concatenate an idea that has notes with a '
+                                  'rhythm-only idea; use * to layer a rhythm onto notes')
+            if self.content is None:
+                self = Idea(Degrees([]), self.rhythm)
+            else:
+                other = Idea(Degrees([]), other.rhythm)
         if self.content is None:
             content = None
         else:
@@ -168,6 +186,14 @@ class Idea:
 
     def _joined_rhythm(self, other):
         if other.rhythm is None:
+            if (self.rhythm and other.content and self.content is not None
+                    and not self.content):
+                steps, _ = rhythm_steps(self.rhythm)
+                if all(rest for rest, _ in steps):
+                    # pure silence has no slots to continue over: the rests
+                    # sound once and other's notes take the pulse it sets
+                    return rhythm_from_steps(
+                        steps + [(False, steps[0][1])] * len(other.content), 0)
             return self.rhythm                      # continues over the joined notes
         b_steps, b_loop = rhythm_steps(other.rhythm)
         if self.rhythm is None:
@@ -195,12 +221,36 @@ class Idea:
     # ------------------------------------------------------------- display
 
     def __len__(self):
-        if self.content is not None:
-            return len(self.content)
-        elif self.rhythm is not None:
-            return len(self.rhythm)
-        else:
+        if not self.content and not self.rhythm:
             return 0
+        return len(self._realize())
+
+    def __getitem__(self, key):
+        """One event as a one-event idea, or a shorter idea over a slice of events.
+
+        The index counts the events as they play — each note or rest with its
+        duration, exactly like `events()` — in every form a list supports:
+        negatives, ranges, steps. A slice keeps the durations it actually
+        plays, so slicing and recombining with `+` reproduces the original; an
+        empty selection is the empty idea. Out-of-range indexes raise
+        IndexError.
+        """
+        if not isinstance(key, (int, slice)):
+            raise TypeError(f'Idea indices must be integers or slices, not {type(key).__name__}')
+        play = [] if not self.content and not self.rhythm else self._realize()
+        picked = play[key]
+        if isinstance(key, int):
+            picked = [picked]
+        if not picked:
+            return Idea()
+        groups = [group for _, group, _ in picked if group is not None]
+        # a content idea stays a content idea even when the slice lands only on
+        # rests, so its pieces still join with + (empty Degrees, not None)
+        content = Degrees(groups) if self.content is not None or groups else None
+        if self.rhythm is None:
+            return Idea(content)
+        return Idea(content, rhythm_from_steps([(rest, duration)
+                                                for rest, _, duration in picked], 0))
 
     def show(self, time='4/4'):
         from . import Part
@@ -227,7 +277,8 @@ class Idea:
         groups = self.content.groups if self.content is not None else None
         if not groups:
             return [(rest, None, duration) for rest, duration in steps]
-        if all(rest for rest, _ in steps[loop_start:]):
+        sounding = sum(1 for rest, _ in steps if not rest)
+        if len(groups) > sounding and all(rest for rest, _ in steps[loop_start:]):
             raise SyntaxError('The looping part of the rhythm has no sounding '
                               'notes to put the content on')
         result = []

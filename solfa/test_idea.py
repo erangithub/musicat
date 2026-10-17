@@ -84,6 +84,31 @@ def test_slots_and_compat_properties():
     assert isinstance(d.content, Degrees)
     assert d.content.groups == [[(1, 0)], [(2, 0)]]
     assert rhythm('4').content is None
+    # indexing reads the realized events — notes and rests in play order — and
+    # a slice carries the durations it actually plays
+    m = pitches('c d e f') * rhythm('4 |: 8')
+    assert m[0] == m[-4] == pitches('c') * rhythm('4') == m[0:1]
+    assert m[1] == pitches('d') * rhythm('8')
+    assert m[0:2] == pitches('c d') * rhythm('4 8')
+    assert m[::2] == pitches('c e') * rhythm('4 8')
+    assert m[-2:] == pitches('e f') * rhythm('8 8')
+    assert m[4:9] == Idea() and m[0:0] == Idea()
+    assert m.rhythm == [F(1, 4), LOOP_MARKER, F(1, 8)]           # the original keeps its marker
+    assert len(m) == 4
+    assert (m[:2] + m[2:]).events() == m.events()                # the pieces recombine
+    assert [x.content.groups for x in m] == [[[(1, 0)]], [[(2, 0)]],
+                                             [[(3, 0)]], [[(4, 0)]]]
+    with pytest.raises(TypeError):
+        m['c']
+    with pytest.raises(IndexError):
+        m[9]
+    # a slice that lands on a rest keeps the content slot (empty), so the
+    # pieces still join back with +
+    t = pitches('c d e') * rhythm('r4 4 r4')
+    assert t[1] == pitches('c') * rhythm('4')
+    assert t[0].content == Degrees([]) and t[0].rhythm == ['r', F(1, 4)]
+    assert (t[:2] + t[2:]).events() == t.events()
+    assert (t[:1] + t[1:3] + t[3:]).events() == t.events()
 
 
 def test_cannot_hold_both_by_construction():
@@ -97,6 +122,8 @@ def test_equality_and_repr():
     assert degrees('1') == pitches('c')                    # degree 1 is c4
     assert len(degrees('1 2 3')) == 3 and len(Idea()) == 0
     assert Idea(rhythm=[]) == Idea()                       # empty rhythm is no rhythm
+    assert len(rhythm('4 r8')) == 2                        # a rest is one step, not two
+    assert len(rhythm('4 |: 8')) == 2                      # a loop marker is not a step
 
 
 # ------------------------------------------------- * : layering and stacking
@@ -258,11 +285,29 @@ def test_concat_rhythm_only():
     r = rhythm('4 8') + rhythm('2')
     assert r.rhythm == [F(1, 4), F(1, 8), LOOP_MARKER, F(1, 2)]
     assert r.content is None
+    # a rhythm that plays only rests carries no notes, so it concatenates
+    # with notes as silence
+    assert ev(degrees('1 2 3 4') * rhythm('4') + rhythm('r4')) == \
+        [('c4', F(1, 4)), ('d4', F(1, 4)), ('e4', F(1, 4)), ('f4', F(1, 4)),
+         ('rest', F(1, 4))]
+    assert ev(rhythm('r4') + degrees('1 2') * rhythm('4')) == \
+        [('rest', F(1, 4)), ('c4', F(1, 4)), ('d4', F(1, 4))]
+    assert ev(degrees('1 2') + rhythm('r4')) == \
+        [('c4', F(1, 4)), ('d4', F(1, 4)), ('rest', F(1, 4))]
+    assert ev(rhythm('r4') + degrees('1 2 3 4')) == \
+        [('rest', F(1, 4)), ('c4', F(1, 4)), ('d4', F(1, 4)), ('e4', F(1, 4)),
+         ('f4', F(1, 4))]
+    # but a rhythm with sounding steps is still ambiguous with layering
+    with pytest.raises(SyntaxError, match=r'use \* to layer'):
+        degrees('1') + rhythm('4 r8')
 
 
 def test_concat_empty_idea_is_identity():
     a = pitches('c d') * rhythm('4')
     assert Idea() + a == a and a + Idea() == a
+    assert Idea()[:] == Idea()                            # no elements to slice
+    with pytest.raises(IndexError):
+        Idea()[0]
 
 
 def test_concat_is_associative_when_every_part_has_rhythm():
@@ -383,12 +428,26 @@ def test_events_rest_that_begins_the_next_pass_is_not_trailing():
 def test_events_rhythm_only_plays_every_step_once():
     assert ev(rhythm('4 4 r4')) == [('rest', F(1, 4))] * 3
     assert durations(rhythm('4 |: 8')) == [F(1, 4), F(1, 8)]
+    # a rhythm-only idea indexes its steps as they play — a rest never splits
+    # from its duration — and a slice drops the loop marker: it just plays the
+    # durations it carries, while + puts the marker back at the join
+    r = rhythm('4 r8 |: 16')
+    assert r[0] == rhythm('4') and r[-1] == rhythm('16')
+    assert r[1:] == rhythm('r8 16') and r[:2] == rhythm('4 r8')
+    assert r[::-1] == rhythm('16 r8 4')
+    assert r[:2] + r[2:] == r
+    assert r[3:] == Idea()
+    with pytest.raises(IndexError):
+        r[9]
 
 
 @pytest.mark.parametrize('text', ['r4', '4 |: r2', 'r4 |: r8'])
 def test_events_loop_without_sounding_step_raises_not_hangs(text):
     with pytest.raises(SyntaxError, match='no sounding notes'):
         (pitches('c d') * rhythm(text)).events()
+    # the guard fires only when the content outlasts the sounding steps: a
+    # rhythm that rests after its last note still realizes
+    assert durations(pitches('c') * rhythm('4 |: r8')) == [F(1, 4), F(1, 8)]
 
 
 def test_events_degrees_resolve_through_the_base():

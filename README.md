@@ -77,6 +77,18 @@ pitches('f4').transpose('4')            # bb4  (a perfect fourth)
 pitches('f4').diatonic('4')             # b4   (the letter, not the sound)
 ```
 
+An idea also indexes and slices like a list, over the events as they play — each note or rest with
+its duration. A single index is a one-event idea, a slice a shorter idea; the slice carries the
+durations it actually plays, so `i[:2] + i[2:]` plays the same as `i`, and an empty selection is the
+empty idea:
+
+```python
+melody = degrees('1 2 3 4 5') * rhythm('4 |: 8')
+melody[0]        # degrees('1') * rhythm('4')
+melody[0:-3]     # degrees('1 2') * rhythm('4 8')
+melody[-2:]      # degrees('4 5') * rhythm('8 8')
+```
+
 ## Degrees and palettes
 
 There is one content type, `Degrees`: a list of groups, each group one note or a chord of
@@ -152,6 +164,7 @@ notes break runs, and beams never cross a barline.
 | `rhythm(text)` | Parses `4 8 r4 \|: 16` into a rhythm-only `Idea`. |
 | `idea * other` | Layer a rhythm onto notes, stack degrees, or repeat by an int. |
 | `idea + other` | Play this idea, then `other`. |
+| `idea[key]` | One event as a one-event idea, or a shorter idea over a slice of the events (`idea[0:-3]`). |
 | `idea.transpose(interval, up=True)` | Move every note by a musical interval (`'4#'`, `'0'`, `'-1'`), keeping its sound; `up=False` mirrors it. |
 | `idea.diatonic(interval, up=True)` | Move every note by whole letter-steps, keeping its accidental. |
 | `idea >> palette` | Compose/select/resolve degrees through a palette (an `Idea` or `Degrees`). |
