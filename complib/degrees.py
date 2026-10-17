@@ -250,26 +250,23 @@ class Degrees:
         """Stack another degree pattern on top of this one (interval addition)."""
         return Degrees(stack_degrees(self.groups, other.groups))
 
-    def transpose(self, interval, palette=None):
-        """Move every note by a degree `interval` through a plane.
+    def transpose(self, interval):
+        """Move every note by a musical interval, measured through the white keys.
 
-        `interval` is a (number, accidental) degree, a one-note Degrees, or a
-        string in the degrees syntax. A string may start with '-' to go down,
-        so '4#' is up a sharp fourth and '-4#' is down one.
+        `interval` is a degree: its magnitude is the interval number (1 the
+        unison, 2 a second, 3 a third, ...), its sign the direction, and an
+        accidental adjusts it in semitones. So '4' is up a fourth, '-4' down a
+        fourth, '4#' up a sharp fourth, and 0, 1 and -1 are all the unison.
 
-        Two degrees add as `P(a) + a'` plus `P(b) + b'` minus `P(a + b - 1)`
-        minus `P(1)`, where `P` is the plane's value at a degree. The plane is
-        the white keys by default; pass another palette to measure elsewhere.
+        The interval keeps its sound, spelled through the white keys: f4 up a
+        fourth is Bb4 (a perfect fourth), not B4.
         """
-        if palette is None:
-            palette = white_keys
-        if not isinstance(palette, Degrees):
-            raise SyntaxError(f'Cannot transpose through {palette!r}: expected degrees')
-        down = False
         if isinstance(interval, str):
             text = interval.strip()
             down = text.startswith('-')
             step, acc = _parse_degree(text[1:] if down else text)
+            if down:
+                step = -step
         elif isinstance(interval, Degrees):
             flat = interval._flat()
             if len(flat) != 1:
@@ -280,20 +277,39 @@ class Degrees:
         else:
             raise SyntaxError(f'Illegal interval {interval!r}')
 
-        if down:
-            value = palette._at((step, 0))[0] + acc
-            step = 2 - step
-            acc = -value - palette._at((step, 0))[0]
-
+        if step == 0:
+            return Degrees([list(group) for group in self.groups])
+        sign = 1 if step > 0 else -1
+        move = sign * (abs(step) - 1)
+        sound = sign * (white_keys._at((abs(step), 0))[0] + acc)
         groups = []
         for group in self.groups:
             notes = []
-            for s1, a1 in group:
-                offset = (palette._at((s1, 0))[0] + palette._at((step, 0))[0]
-                          - palette._at((s1 + step - 1, 0))[0] - palette._at((1, 0))[0])
-                notes.append((s1 + step - 1, a1 + acc + offset))
+            for number, own in group:
+                letter = number + move
+                value = white_keys._at((number, 0))[0] + own + sound
+                notes.append((letter, value - white_keys._at((letter, 0))[0]))
             groups.append(notes)
         return Degrees(groups)
+
+    def diatonic(self, interval):
+        """Move every note by whole letter-steps, keeping its accidental.
+
+        `interval` counts letters, 1-based like `transpose`: 0, 1 and -1 are the
+        unison, 2 up a letter, -2 down a letter. Only whole steps are allowed.
+        """
+        if isinstance(interval, str):
+            text = interval.strip()
+            if not re.fullmatch(r'-?\d+', text):
+                raise SyntaxError(f'A diatonic interval is whole letters, not {interval!r}')
+            step = int(text)
+        elif isinstance(interval, int):
+            step = interval
+        else:
+            raise SyntaxError(f'Illegal interval {interval!r}')
+        move = max(step - 1, 0) if step >= 0 else min(step + 1, 0)
+        return Degrees([[(number + move, acc) for number, acc in group]
+                        for group in self.groups])
 
     def __rshift__(self, other):
         return self.compose(other)
@@ -302,6 +318,6 @@ class Degrees:
         return self.decompose(other)
 
 
-# the plane transpose measures through by default: the white keys, whose degrees
-# are semitones (the closing 12 is the period marker)
+# the white keys, whose degrees are semitones (the closing 12 is the period
+# marker): the plane `transpose` measures through, and a palette for `>>`/`<<`
 white_keys = Degrees(parse_degrees('0 2 4 5 7 9 11 12'))

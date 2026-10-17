@@ -27,8 +27,10 @@ class Idea:
 
         rhythm('8') * degrees('1 2 3') * degrees('0 1 2 3') >> degrees('d4 f a')
 
-    `transpose(interval, palette)` moves every note by a degree, or a string like
-    '4#' / '-4#', through a plane (the white keys by default, or another palette).
+    `transpose(interval)` moves every note by a musical interval, 1-based and
+    measured through the white keys ('4' is up a fourth, '-4#' down a sharp
+    fourth, and 0/1/-1 are all the unison). `diatonic(interval)` moves by whole
+    letter-steps instead, keeping each note's accidental.
 
     A rhythm loops over the content: with no loop marker the whole rhythm
     repeats, and '|:' marks where the repeating part starts ('4 |: 8' is a
@@ -115,17 +117,26 @@ class Idea:
         one_pass = [(rest, duration) for rest, _, duration in self._realize()]
         return Idea(content, rhythm_from_steps(one_pass, 0))
 
-    def transpose(self, interval, palette=None):
-        """Move every note by a degree `interval` through a plane.
+    def transpose(self, interval):
+        """Move every note by a musical interval, measured through the white keys.
 
-        `interval` is a (number, accidental) degree, a one-note Degrees, or a
-        string in the degrees syntax ('4#' is up a sharp fourth, '-4#' down
-        one). The plane is the white keys by default; pass another palette (a
-        Degrees) to measure in a different plane. Rhythms are kept as they are.
+        `interval` counts degrees, 1-based: 0, 1 and -1 are the unison, '4' up a
+        fourth, '-4' down a fourth, '4#' up a sharp fourth. The interval keeps
+        its sound, so f4 up a fourth is Bb4. Rhythms are kept as they are.
         """
         if self.content is None:
             raise SyntaxError('A rhythm-only idea has nothing to transpose')
-        return Idea(self.content.transpose(interval, palette), self.rhythm)
+        return Idea(self.content.transpose(interval), self.rhythm)
+
+    def diatonic(self, interval):
+        """Move every note by whole letter-steps, keeping its accidental.
+
+        `interval` counts letters, 1-based like `transpose`: 0, 1 and -1 are the
+        unison, 2 up a letter, -2 down a letter. Rhythms are kept as they are.
+        """
+        if self.content is None:
+            raise SyntaxError('A rhythm-only idea has nothing to transpose')
+        return Idea(self.content.diatonic(interval), self.rhythm)
 
     # ---------------------------------------------------------- sequencing
 

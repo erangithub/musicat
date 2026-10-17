@@ -287,13 +287,14 @@ def test_concat_before_resolving():
     assert ev(phrase) == [('c4', F(1, 4)), ('d4', F(1, 4)), ('g4', F(1, 2))]
 
 
-# ----------------------------------------------------- transpose: planes
+# -------------------------------------------------- transpose / diatonic
 
 def test_transpose_string_goes_down_with_a_minus():
     m = pitches('c4 e4 g4')
     assert names(m.transpose('4#')) == [['f#4'], ['a#4'], ['c#5']]
     assert names(m.transpose('-4#')) == [['gb3'], ['bb3'], ['db4']]
-    assert m.transpose('1') == m and m.transpose('-1') == m     # a unison moves nothing
+    assert m.transpose('0') == m                                    # a unison moves nothing
+    assert m.transpose('1') == m and m.transpose('-1') == m
 
 
 def test_transpose_accepts_a_tuple_or_degrees():
@@ -302,23 +303,31 @@ def test_transpose_accepts_a_tuple_or_degrees():
     assert m.transpose(degrees('4#').content) == m.transpose('4#')
 
 
-def test_transpose_through_another_plane():
+def test_transpose_keeps_the_sounds():
+    assert names(pitches('c4').transpose('4')) == [['f4']]         # a fourth up
+    assert names(pitches('f4').transpose('4')) == [['bb4']]        # still a fourth
+    assert names(pitches('c4').transpose('-2')) == [['bb3']]       # a second down
+
+
+def test_diatonic_moves_letters_and_keeps_the_accidental():
+    assert names(pitches('c4').diatonic(4)) == [['f4']]
+    assert names(pitches('f4').diatonic(4)) == [['b4']]            # letters, not sound
+    assert names(pitches('c4').diatonic(-2)) == [['b3']]
+    assert names(pitches('f#4').diatonic(4)) == [['b#4']]          # the sharp rides along
     m = pitches('c4 e4 g4')
-    d_major = degrees('2 4 6 7 9 11 13 14').content   # d major, measured from c
-    minor = degrees('0 2 3 5 7 8 10 12').content       # a minor third on degree 3
-    assert m.transpose('3', d_major) == m.transpose('3')    # a major plane agrees
-    assert names(m.transpose('3', minor)) == [['e4'], ['gb4'], ['b4']]
-    lifted = m.transpose('4#', minor)                       # and is invertible
-    assert lifted.transpose('-4#', minor) == m
-    with pytest.raises(SyntaxError, match='expected degrees'):   # a plane is a Degrees
-        m.transpose('3', degrees('1 2 3'))
+    assert m.diatonic('0') == m and m.diatonic('1') == m and m.diatonic('-1') == m
+    with pytest.raises(SyntaxError, match='whole letters'):        # no accidentals allowed
+        m.diatonic('4#')
 
 
 def test_transpose_keeps_rhythm_and_needs_notes():
     r = degrees('1 2') * rhythm('4 8')
     assert r.transpose('2').rhythm == r.rhythm
+    assert r.diatonic('2').rhythm == r.rhythm
     with pytest.raises(SyntaxError, match='nothing to transpose'):
         rhythm('4').transpose('2')
+    with pytest.raises(SyntaxError, match='nothing to transpose'):
+        rhythm('4').diatonic('2')
     with pytest.raises(SyntaxError, match='Illegal degree'):
         pitches('c').transpose('1 2')
 

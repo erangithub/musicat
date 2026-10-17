@@ -11,7 +11,7 @@ from fractions import Fraction as F
 import pytest
 
 from complib import k545
-from complib.pitches import NATURAL_PITCH
+from complib.degrees import white_keys
 
 BARS = 8
 
@@ -21,8 +21,7 @@ def ours(idea):
     out, offset = [], F(0)
     for group, duration in idea.events():
         # a degree's sound, with middle C at 60 like the reference encodings
-        sounds = (12 * ((n - 1) // 7) + NATURAL_PITCH[(n - 1) % 7] + a + 60
-                  for n, a in group)
+        sounds = (white_keys._at((n, 0))[0] + a + 60 for n, a in group)
         out.append((offset, tuple(sorted(sounds)), duration * 4))
         offset += duration * 4
     return out

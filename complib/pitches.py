@@ -4,7 +4,6 @@ from .errors import SyntaxError
 from .degrees import Degrees, parse_degrees
 
 LETTERS = 'cdefgab'
-NATURAL_PITCH = (0, 2, 4, 5, 7, 9, 11)
 
 # degree 1 is c4 (middle C), the octave the parser starts at, so a plain letter
 # name maps straight onto a plain degree; notes below c4 are negative
@@ -15,8 +14,7 @@ def parse_pitches(text):
     """Parse pitch names ('c4', 'f#', '<c4 e g>') into degrees.
 
     A name's octave defaults to the running one, which starts at 4 and follows
-    the last name that wrote one. Inside a chord a name without an octave is
-    placed above the note before it, so chords ascend.
+    the last name that wrote one, whether inside a chord or not.
     """
     groups = []
     min_octave = 4
@@ -36,31 +34,18 @@ def parse_pitches(text):
         if match.start() != position:
             raise SyntaxError(f'Illegal chord near "{text[position:].strip()}"')
         position = match.end()
-        if match.group(1) is None:
-            for name in match.group().split():
-                number, acc, explicit = note(name, min_octave)
-                if explicit is not None:
-                    min_octave = int(explicit)
-                groups.append([(number, acc)])
+        chord = match.group(1) is not None
+        names = (match.group(1) if chord else match.group()).split()
+        notes = []
+        for name in names:
+            number, acc, explicit = note(name, min_octave)
+            if explicit is not None:
+                min_octave = int(explicit)
+            notes.append((number, acc))
+        if chord:
+            groups.append(notes)
         else:
-            names = match.group(1).split()
-            if not names:
-                groups.append([])
-                continue
-            root, root_acc, _ = note(names[0], min_octave)
-            chord = [(root, root_acc)]
-            running = NATURAL_PITCH[(root - 1) % 7] + 12 * ((root - 1) // 7) + root_acc
-            for name in names[1:]:
-                number, acc, explicit = note(name, min_octave)
-                natural = NATURAL_PITCH[(number - 1) % 7] + 12 * ((number - 1) // 7) + acc
-                if explicit is None:
-                    while natural <= running:
-                        number += 7
-                        natural += 12
-                chord.append((number, acc))
-                running = natural
-            groups.append(chord)
-            min_octave = (root - 1) // 7 + ORIGIN // 7
+            groups.extend([note] for note in notes)
     if position != len(text):
         raise SyntaxError(f'Illegal chord near "{text[position:].strip()}"')
     return Degrees(groups)
@@ -89,11 +74,17 @@ def format_pitches(groups, limit=None):
 
 def major_scale(root_str):
     """The major scale on `root_str` as degrees, closing on its octave."""
-    root = parse_pitches(root_str).groups[0][0]
-    return Degrees(parse_degrees('1..8')).transpose(root)
+    p, acc = parse_pitches(root_str).groups[0][0]
+    letter = ((p - 1) % 7) + 1
+    shift = 7 * ((p - 1) // 7)          # whole octaves down to the root's octave
+    step = shift + 1 if shift >= 0 else shift - 1
+    return Degrees(parse_degrees('1..8')).diatonic(step).transpose((letter, acc))
 
 
 def minor_scale(root_str):
     """The natural minor scale on `root_str` as degrees, closing on its octave."""
-    root = parse_pitches(root_str).groups[0][0]
-    return Degrees(parse_degrees('1 2 3b 4 5 6b 7b 8')).transpose(root)
+    p, acc = parse_pitches(root_str).groups[0][0]
+    letter = ((p - 1) % 7) + 1
+    shift = 7 * ((p - 1) // 7)          # whole octaves down to the root's octave
+    step = shift + 1 if shift >= 0 else shift - 1
+    return Degrees(parse_degrees('1 2 3b 4 5 6b 7b 8')).diatonic(step).transpose((letter, acc))
