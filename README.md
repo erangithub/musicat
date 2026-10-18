@@ -39,7 +39,7 @@ Stop the server with `Ctrl-C`.
 ```python
 from solfa import degrees, pitches, rhythm, major_scale, show
 
-melody = degrees('1 2 3 1') * rhythm('4 4 4 2') >> major_scale('c')
+melody = degrees('1 2 3 1') @ rhythm('4 4 4 2') >> major_scale('c')
 melody.show()                              # renders the line inline
 ```
 
@@ -47,15 +47,16 @@ An `Idea` has two slots: `content` (degrees) and `rhythm`. Either may be missing
 operator combine ideas, tightest first:
 
 ```
-*       builds:     rhythm * degrees layers a rhythm onto notes;
-                    degrees * degrees stacks; idea * 3 repeats.
+@       composes:   rhythm @ degrees layers a rhythm onto notes;
+                    degrees @ degrees stacks. Either way round.
+*       repeats:    idea * 3 repeats an idea (same level as @).
 +       sequences:  a + b plays a, then b.
 >> <<   resolves:   degrees >> palette selects/resolves through a palette;
                     notes << palette recovers their degrees.
 ```
 
 ```python
-rhythm('8') * degrees('1 2 3')             # three notes, each an eighth (looping rhythm)
+rhythm('8') @ degrees('1 2 3')             # three notes, each an eighth (looping rhythm)
 degrees('1 3 5') >> major_scale('c')       # c4 e4 g4
 degrees('1 2') + degrees('5')              # 1 2 5
 degrees('1 2') * 3                         # 1 2 1 2 1 2
@@ -83,10 +84,10 @@ durations it actually plays, so `i[:2] + i[2:]` plays the same as `i`, and an em
 empty idea:
 
 ```python
-melody = degrees('1 2 3 4 5') * rhythm('4 |: 8')
-melody[0]        # degrees('1') * rhythm('4')
-melody[0:-3]     # degrees('1 2') * rhythm('4 8')
-melody[-2:]      # degrees('4 5') * rhythm('8 8')
+melody = degrees('1 2 3 4 5') @ rhythm('4 |: 8')
+melody[0]        # degrees('1') @ rhythm('4')
+melody[0:-3]     # degrees('1 2') @ rhythm('4 8')
+melody[-2:]      # degrees('4 5') @ rhythm('8 8')
 ```
 
 ## Degrees and palettes
@@ -132,7 +133,7 @@ and `r` prefixes a rest (`'r4'`). `_realize`/`events()` unroll an idea into `(pi
 pairs, which is what rendering consumes:
 
 ```python
-(degrees('1 2 3') * rhythm('4 8')).events()   # [(c4, 1/4), (d4, 1/8), (e4, 1/4)]
+(degrees('1 2 3') @ rhythm('4 8')).events()   # [(c4, 1/4), (d4, 1/8), (e4, 1/4)]
 ```
 
 ## Scores and rendering
@@ -162,7 +163,8 @@ notes break runs, and beams never cross a barline.
 | `pitches(text)` | Parses `c`, `f#`, `bb3`, `<c e g>` into an `Idea` of degrees (letter input sugar). |
 | `degrees(text)` | Parses `1 3 5`, `<1 3 5>`, `1..5`, `2#` into an `Idea` of degrees. |
 | `rhythm(text)` | Parses `4 8 r4 \|: 16` into a rhythm-only `Idea`. |
-| `idea * other` | Layer a rhythm onto notes, stack degrees, or repeat by an int. |
+| `idea @ other` | Compose: layer a rhythm onto notes, stack degrees — either way round. |
+| `idea * other` | Repeat by an int (`idea * 3`). |
 | `idea + other` | Play this idea, then `other`. |
 | `idea[key]` | One event as a one-event idea, or a shorter idea over a slice of the events (`idea[0:-3]`). |
 | `idea.transpose(interval, up=True)` | Move every note by a musical interval (`'4#'`, `'0'`, `'-1'`), keeping its sound; `up=False` mirrors it. |

@@ -19,13 +19,14 @@ class Idea:
 
     Three levels of operator, tightest first:
 
-      *       builds:     rhythm * degrees layers a rhythm onto notes,
-                          degrees * degrees stacks, idea * 3 repeats.
+      @       composes:   rhythm @ degrees layers a rhythm onto notes;
+                          degrees @ degrees stacks. Either way round.
+      *       repeats:    idea * 3 repeats an idea (same level as @).
       +       sequences:  a + b plays a, then b.
       >> <<   resolves:   degrees >> palette selects/resolves through a palette,
                           notes << palette asks for their degrees.
 
-        rhythm('8') * degrees('1 2 3') * degrees('0 1 2 3') >> degrees('d4 f a')
+        rhythm('8') @ degrees('1 2 3') @ degrees('0 1 2 3') >> degrees('d4 f a')
 
     `transpose(interval)` moves every note by a musical interval, counted on the
     same degree number line as notes ('4' is up a fourth, '0' down a second, and
@@ -55,14 +56,14 @@ class Idea:
 
     def __repr__(self):
         """The expression that builds this idea, e.g.
-        degrees('1 3 5') * rhythm('4 r4 |: 8'). Long ideas are cut short with
+        degrees('1 3 5') @ rhythm('4 r4 |: 8'). Long ideas are cut short with
         '…' (those reprs are for reading, not for eval)."""
         parts = []
         if self.content is not None:
             parts.append(f"degrees('{format_degrees(self.content.groups, _REPR_GROUPS)}')")
         if self.rhythm is not None:
             parts.append(f"rhythm('{format_rhythm(self.rhythm, _REPR_RHYTHM_TOKENS)}')")
-        return ' * '.join(parts) if parts else 'Idea()'
+        return ' @ '.join(parts) if parts else 'Idea()'
 
     def _is_empty(self):
         return self.content is None and self.rhythm is None
@@ -70,12 +71,20 @@ class Idea:
     # ------------------------------------------------------------ building
 
     def __mul__(self, other):
-        if isinstance(other, Idea):
-            return self._layer(other)
         if _is_count(other):
             return self._repeat(other)
         raise SyntaxError(f'Cannot multiply an idea by {other!r}: '
-                          'use another idea to layer, or an int to repeat')
+                          'use @ to compose, or an int to repeat')
+
+    def __matmul__(self, other):
+        if isinstance(other, Idea):
+            return self._layer(other)
+        raise SyntaxError(f'Cannot compose an idea with {other!r}: '
+                          'use an idea, or * to repeat')
+
+    def __rmatmul__(self, other):
+        raise SyntaxError(f'Cannot compose {other!r} with an idea: '
+                          'use an idea on both sides')
 
     def __rmul__(self, other):
         if _is_count(other):
@@ -169,11 +178,11 @@ class Idea:
         if (self.content is None) != (other.content is None):
             # a rhythm that plays only rests carries no notes of its own, so it
             # concatenates as silence; one with sounding steps is ambiguous
-            # with layering onto notes (use * for that)
+            # with composing onto notes (use @ for that)
             silent = other if self.content is not None else self
             if any(not rest for rest, _ in rhythm_steps(silent.rhythm)[0]):
                 raise SyntaxError('Cannot concatenate an idea that has notes with a '
-                                  'rhythm-only idea; use * to layer a rhythm onto notes')
+                                  'rhythm-only idea; use @ to compose a rhythm onto notes')
             if self.content is None:
                 self = Idea(Degrees([]), self.rhythm)
             else:
