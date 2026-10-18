@@ -143,13 +143,15 @@ def test_stacking_keeps_whichever_rhythm_exists():
     assert r.content.groups == [[(1, 0)], [(2, 0)], [(3, 0)], [(4, 0)]]
     chain = rhythm('4') @ degrees('1 2') @ degrees('1 3')
     assert chain == r
+    # when both sides carry a rhythm, the right-hand one replaces the left
+    assert rhythm('4') @ rhythm('8') == rhythm('8')
+    retime = (degrees('1 2') @ rhythm('4 |: 8')) @ rhythm('2')
+    assert retime == degrees('1 2') @ rhythm('2')
+    stacked = (degrees('1 2') @ rhythm('4')) @ (degrees('1 3') @ rhythm('8'))
+    assert stacked == degrees('1 2 3 4') @ rhythm('8')
 
 
 def test_layer_and_stack_errors():
-    with pytest.raises(SyntaxError, match='share rhythm'):
-        (degrees('1') @ rhythm('4')) @ (degrees('1') @ rhythm('8'))
-    with pytest.raises(SyntaxError, match='share rhythm'):
-        rhythm('4') @ rhythm('8')
     with pytest.raises(SyntaxError, match=r'use @ to compose'):
         degrees('1 2') * degrees('3 4')
     with pytest.raises(SyntaxError, match=r'\* to repeat'):

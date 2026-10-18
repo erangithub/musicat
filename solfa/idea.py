@@ -93,9 +93,8 @@ class Idea:
                           'use an int to repeat')
 
     def _layer(self, other):
-        """Fill the slots of both ideas into one; degrees with degrees stack."""
-        if self.rhythm is not None and other.rhythm is not None:
-            raise SyntaxError('Cannot combine ideas that share rhythm')
+        """Fill the slots of both ideas into one; degrees with degrees stack,
+        and a rhythm on the right replaces one on the left."""
         if self.content is None:
             content = other.content
         elif other.content is None:
@@ -103,11 +102,14 @@ class Idea:
         else:
             content = self.content.stack(other.content)
 
-        if self.rhythm:
+        if other.rhythm:
+            rhythm = other.rhythm              # the right-hand rhythm wins
+        elif self.rhythm:
             one_pass = [(rest, duration) for rest, _, duration in self._realize()]
-            return Idea(content, rhythm_from_steps(one_pass, 0))
+            rhythm = rhythm_from_steps(one_pass, 0)
         else:
-            return Idea(content, other.rhythm)
+            rhythm = None
+        return Idea(content, rhythm)
 
     def _repeat(self, count):
         """Play this idea `count` times.

@@ -163,7 +163,7 @@ notes break runs, and beams never cross a barline.
 | `pitches(text)` | Parses `c`, `f#`, `bb3`, `<c e g>` into an `Idea` of degrees (letter input sugar). |
 | `degrees(text)` | Parses `1 3 5`, `<1 3 5>`, `1..5`, `2#` into an `Idea` of degrees. |
 | `rhythm(text)` | Parses `4 8 r4 \|: 16` into a rhythm-only `Idea`. |
-| `idea @ other` | Compose: layer a rhythm onto notes, stack degrees — either way round. |
+| `idea @ other` | Compose: layer a rhythm onto notes, stack degrees — either way round; a rhythm on the right replaces one on the left. |
 | `idea * other` | Repeat by an int (`idea * 3`). |
 | `idea + other` | Play this idea, then `other`. |
 | `idea[key]` | One event as a one-event idea, or a shorter idea over a slice of the events (`idea[0:-3]`). |
