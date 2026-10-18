@@ -1,7 +1,7 @@
 # solfa
 
 A programmable library for composing music. Draft stage: an `Idea` is content (degrees) plus
-a rhythm, combined with operators, resolved through palettes, and rendered to notation via Verovio.
+a rhythm, combined with operators, mapped through palettes, and rendered to notation via Verovio.
 
 ## Setup
 
@@ -37,9 +37,9 @@ Stop the server with `Ctrl-C`.
 ## Using solfa in a notebook
 
 ```python
-from solfa import degrees, pitches, rhythm, major_scale, show
+from solfa import deg, pit, rhy, major_scale, show
 
-melody = degrees('1 2 3 1') @ rhythm('4 4 4 2') >> major_scale('c')
+melody = deg('1 2 3 1') @ rhy('4 4 4 2') >> major_scale('c')
 melody.show()                              # renders the line inline
 ```
 
@@ -48,18 +48,18 @@ operator combine ideas, tightest first:
 
 ```
 @       composes:   rhythm @ degrees layers a rhythm onto notes;
-                    degrees @ degrees stacks. Either way round.
+                    degrees @ degrees stacks (the left pattern is the outer loop).
 *       repeats:    idea * 3 repeats an idea (same level as @).
 +       sequences:  a + b plays a, then b.
->> <<   resolves:   degrees >> palette selects/resolves through a palette;
+>> <<   maps:       degrees >> palette maps degrees through a palette;
                     notes << palette recovers their degrees.
 ```
 
 ```python
-rhythm('8') @ degrees('1 2 3')             # three notes, each an eighth (looping rhythm)
-degrees('1 3 5') >> major_scale('c')       # c4 e4 g4
-degrees('1 2') + degrees('5')              # 1 2 5
-degrees('1 2') * 3                         # 1 2 1 2 1 2
+rhy('8') @ deg('1 2 3')             # three notes, each an eighth (looping rhythm)
+deg('1 3 5') >> major_scale('c')    # c4 e4 g4
+deg('1 2') + deg('5')               # 1 2 5
+deg('1 2') * 3                      # 1 2 1 2 1 2
 ```
 
 An idea also transposes. An interval is a degree on the same number line as notes: `1`
@@ -70,12 +70,12 @@ white keys: a fourth above `f4` is `bb4`, not `b4`. `diatonic(interval)` instead
 whole letter-steps, keeping each note's accidental: a fourth above `f4` is `b4`.
 
 ```python
-pitches('c4 e4 g4').transpose('4#')     # f#4 a#4 c#5
-pitches('c4 e4 g4').transpose('0')      # b3 d#4 f#4   (a second down)
-pitches('c4 e4 g4').transpose('-1')     # a3 c#4 e4    (a third down)
-pitches('c4').transpose('2', up=False)  # bb3          (a second down)
-pitches('f4').transpose('4')            # bb4  (a perfect fourth)
-pitches('f4').diatonic('4')             # b4   (the letter, not the sound)
+pit('c4 e4 g4').transpose('4#')     # f#4 a#4 c#5
+pit('c4 e4 g4').transpose('0')      # b3 d#4 f#4   (a second down)
+pit('c4 e4 g4').transpose('-1')     # a3 c#4 e4    (a third down)
+pit('c4').transpose('2', up=False)  # bb3          (a second down)
+pit('f4').transpose('4')            # bb4  (a perfect fourth)
+pit('f4').diatonic('4')             # b4   (the letter, not the sound)
 ```
 
 An idea also indexes and slices like a list, over the events as they play — each note or rest with
@@ -84,10 +84,10 @@ durations it actually plays, so `i[:2] + i[2:]` plays the same as `i`, and an em
 empty idea:
 
 ```python
-melody = degrees('1 2 3 4 5') @ rhythm('4 |: 8')
-melody[0]        # degrees('1') @ rhythm('4')
-melody[0:-3]     # degrees('1 2') @ rhythm('4 8')
-melody[-2:]      # degrees('4 5') @ rhythm('8 8')
+melody = deg('1 2 3 4 5') @ rhy('4 |: 8')
+melody[0]        # deg('1') @ rhy('4')
+melody[0:-3]     # deg('1 2') @ rhy('4 8')
+melody[-2:]      # deg('4 5') @ rhy('8 8')
 ```
 
 ## Degrees and palettes
@@ -95,15 +95,15 @@ melody[-2:]      # degrees('4 5') @ rhythm('8 8')
 There is one content type, `Degrees`: a list of groups, each group one note or a chord of
 `(number, accidental)`. Numbers are relative to the 7-letter base with `c4` (middle C) as `1`, so
 `b4` is `7`, `c5` is `8` and notes below `c4` go negative; the plain letters are the identity palette.
-`pitches(text)` parses letter names into the same type as input sugar:
+`pit(text)` parses letter names into degrees, the same way:
 
 ```python
-degrees('1 3 5')            # Degrees('1 3 5')  = c4 e4 g4
-pitches('c4 e4 g4')         # degrees('1 3 5')  (the same thing)
-format_pitches(pitches('c4 e4 g4').content.groups)  # 'c4 e4 g4'  back to letter names
+deg('1 3 5')            # deg('1 3 5')  = c4 e4 g4
+pit('c4 e4 g4')         # deg('1 3 5')  (the same thing)
+format_pitches(pit('c4 e4 g4').content.groups)  # 'c4 e4 g4'  back to letter names
 ```
 
-A palette is just another `Idea`/`Degrees`, so `>>` composes degrees through it and `<<` is the
+A palette is just another `Idea`, so `>>` maps degrees through it and `<<` is the
 inverse. Its groups are flattened, and it **closes explicitly**: all but the last note form the
 repeating unit, and the last note is a marker whose interval above the first note is the period — so
 `c d e` repeats as `c d | e f | g a | b c …`. Write palettes with their closing octave (`c4 e g c5`,
@@ -111,18 +111,18 @@ repeating unit, and the last note is a marker whose interval above the first not
 of a palette, keeps the left side's chords, and flattens the palette's:
 
 ```python
-degrees('1 4 7') >> pitches('d4 f a d5')   # d4 d5 d6
-degrees('2 3 4 5 6 7 8') >> major_scale('c')   # D Dorian
-pitches('c4 db4 c#4 d4') << major_scale('c')   # 1, 2b, 1#, 2  (spelling kept)
+deg('1 4 7') >> pit('d4 f a d5')   # d4 d5 d6
+deg('2 3 4 5 6 7 8') >> major_scale('c')   # D Dorian
+pit('c4 db4 c#4 d4') << major_scale('c')   # 1, 2b, 1#, 2  (spelling kept)
 ```
 
 A single-note palette has period zero and just returns that note.
 
-`major_scale(root)` and `minor_scale(root)` return the scale as `Degrees`, including the closing
+`major_scale(root)` and `minor_scale(root)` return the scale as an `Idea`, including the closing
 octave so the period is one octave:
 
 ```python
-major_scale('f')            # Degrees('4 5 6 7b 8 9 10 11')  = f4 g4 a4 bb4 c5 d5 e5 f5
+major_scale('f')            # deg('4 5 6 7b 8 9 10 11')  = f4 g4 a4 bb4 c5 d5 e5 f5
 ```
 
 ## Rhythm and events
@@ -133,7 +133,7 @@ and `r` prefixes a rest (`'r4'`). `_realize`/`events()` unroll an idea into `(pi
 pairs, which is what rendering consumes:
 
 ```python
-(degrees('1 2 3') @ rhythm('4 8')).events()   # [(c4, 1/4), (d4, 1/8), (e4, 1/4)]
+(deg('1 2 3') @ rhy('4 8')).events()   # [(c4, 1/4), (d4, 1/8), (e4, 1/4)]
 ```
 
 ## Scores and rendering
@@ -160,21 +160,23 @@ notes break runs, and beams never cross a barline.
 | | |
 |---|---|
 | `Idea(content=None, rhythm=None)` | Content (a `Degrees`) plus a rhythm. Empty is the identity for `+`. |
-| `pitches(text)` | Parses `c`, `f#`, `bb3`, `<c e g>` into an `Idea` of degrees (letter input sugar). |
-| `degrees(text)` | Parses `1 3 5`, `<1 3 5>`, `1..5`, `2#` into an `Idea` of degrees. |
-| `rhythm(text)` | Parses `4 8 r4 \|: 16` into a rhythm-only `Idea`. |
-| `idea @ other` | Compose: layer a rhythm onto notes, stack degrees — either way round; a rhythm on the right replaces one on the left. |
+| `pit(text)` | Parses `c`, `f#`, `bb3`, `<c e g>` into an `Idea` of degrees (letter input sugar). |
+| `deg(text)` | Parses `1 3 5`, `<1 3 5>`, `1..5`, `2#` into an `Idea` of degrees. |
+| `rhy(text)` | Parses `4 8 r4 \|: 16` into a rhythm-only `Idea`. |
+| `idea @ other` | Compose: layer a rhythm onto notes (either way round), stack degrees (left is the outer loop); a rhythm on the right replaces one on the left. |
 | `idea * other` | Repeat by an int (`idea * 3`). |
 | `idea + other` | Play this idea, then `other`. |
 | `idea[key]` | One event as a one-event idea, or a shorter idea over a slice of the events (`idea[0:-3]`). |
 | `idea.transpose(interval, up=True)` | Move every note by a musical interval (`'4#'`, `'0'`, `'-1'`), keeping its sound; `up=False` mirrors it. |
 | `idea.diatonic(interval, up=True)` | Move every note by whole letter-steps, keeping its accidental. |
-| `idea >> palette` | Compose/select/resolve degrees through a palette (an `Idea` or `Degrees`). |
+| `idea.invert(low, high)` | Mirror every degree around the `low`..`high` axis; the rhythm is kept. |
+| `idea.retrograde(...)` | Play the idea backwards; `retrograde_degrees`/`retrograde_rhythm` pick which layers reverse. |
+| `idea >> palette` | Map/select degrees through a palette (an `Idea`). |
 | `idea << palette` | Recover the degrees of pitches in a palette. |
 | `Degrees(groups)` | The one content type: groups of `(number, accidental)`. |
-| `Degrees.compose(other)` / `.decompose(other, strict=False)` | The two directions of `>>` / `<<`. |
+| `Degrees.map(other)` / `.unmap(other, strict=False)` | The two directions of `>>` / `<<`. |
 | `parse_pitches(text)` / `format_pitches(groups)` | The letter language either way: names to degrees, degrees to names. |
-| `major_scale(root)` / `minor_scale(root)` | The scale as `Degrees`. |
+| `major_scale(root)` / `minor_scale(root)` | The scale as an `Idea`. |
 | `Event`/`Sequence` model | Replaced by `Idea`; `events()` unrolls one into `(group, duration)` pairs. |
 | `Part(idea, name='Music')` | One staff of a score. |
 | `Score(parts, time='4/4')` | A list of `Part`s and the time signature, written `'6/8'`. |

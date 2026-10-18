@@ -22,7 +22,7 @@ def _parse_degree(text):
 # <  >  ..  step:  degree  whitespace.  The step is tried before the degree so that
 # '10:' is a step and not the degree '1'; a degree may not run straight into
 # another digit or a minus sign ('1b2', '5-3').
-_TOKEN = re.compile(r'(<)|(>)|(\.\.)|(,,)||(\d+):|(-?\d+(?:b+|#+)?)(?![-\d])|\s+')
+_TOKEN = re.compile(r'(<)|(>)|(\.\.)|(,,)|(\d+):|(-?\d+(?:b+|#+)?)(?![-\d])|\s+')
 
 
 def parse_degrees(text):
@@ -307,10 +307,10 @@ class Degrees:
                         for group in self.groups])
 
     def __rshift__(self, other):
-        return self.compose(other)
+        return self.map(other)
 
     def __lshift__(self, other):
-        return self.decompose(other)
+        return self.unmap(other)
 
 
 # the white keys, whose degrees are semitones (the closing 12 is the period

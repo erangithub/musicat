@@ -1,6 +1,6 @@
 from .errors import SyntaxError
 from .pitches import parse_pitches
-from .degrees import parse_degrees, format_degrees, Degrees
+from .degrees import parse_degrees, format_degrees, _parse_degree, Degrees
 from .rhythm import (parse_rhythm, format_rhythm, rhythm_steps,
                      rhythm_from_steps, WHOLE)
 
@@ -56,13 +56,13 @@ class Idea:
 
     def __repr__(self):
         """The expression that builds this idea, e.g.
-        degrees('1 3 5') @ rhythm('4 r4 |: 8'). Long ideas are cut short with
+        deg('1 3 5') @ rhy('4 r4 |: 8'). Long ideas are cut short with
         '…' (those reprs are for reading, not for eval)."""
         parts = []
         if self.content is not None:
-            parts.append(f"degrees('{format_degrees(self.content.groups, _REPR_GROUPS)}')")
+            parts.append(f"deg('{format_degrees(self.content.groups, _REPR_GROUPS)}')")
         if self.rhythm is not None:
-            parts.append(f"rhythm('{format_rhythm(self.rhythm, _REPR_RHYTHM_TOKENS)}')")
+            parts.append(f"rhy('{format_rhythm(self.rhythm, _REPR_RHYTHM_TOKENS)}')")
         return ' @ '.join(parts) if parts else 'Idea()'
 
     def _is_empty(self):
@@ -214,21 +214,75 @@ class Idea:
             a_steps = [(rest, duration) for rest, _, duration in self._realize()]
         return rhythm_from_steps(a_steps + b_steps, len(a_steps) + b_loop)
 
-    # ----------------------------------------------------------- resolving
+    # ----------------------------------------------------------- mapping
 
-    def __rshift__(self, palette):
+    def __rshift__(self, target):
         if self.content is None:
-            raise SyntaxError('A rhythm-only idea has nothing to resolve')
-        content = self.content.map(palette.content if isinstance(palette, Idea)
-                                       else palette)
+            raise SyntaxError('A rhythm-only idea has nothing to map')
+        content = self.content.map(target.content)
         return Idea(content, self.rhythm)
 
-    def __lshift__(self, palette):
+    def __lshift__(self, target):
         if self.content is None:
-            raise SyntaxError('A rhythm-only idea has nothing to resolve')
-        content = self.content.unmap(palette.content if isinstance(palette, Idea)
-                                         else palette)
+            raise SyntaxError('A rhythm-only idea has nothing to map')
+        content = self.content.unmap(target.content)
         return Idea(content, self.rhythm)
+
+    # ------------------------------------------------- inverting, retrograding
+
+    def invert(self, low, high):
+        """Mirror every degree around the axis `low`..`high`; rhythm is kept.
+
+        Each degree's distance from `low` becomes the same distance from
+        `high`, so `invert('1', '5')` turns '1 2 3 4 5' into '5 4 3 2 1' and
+        '3#' into '3b'. Accepts degrees as text or (number, accidental)
+        tuples, like `transpose`.
+        """
+        if self.content is None:
+            raise SyntaxError('A rhythm-only idea has nothing to invert')
+        axis = []
+        for value in (low, high):
+            if isinstance(value, str):
+                axis.append(_parse_degree(value.strip()))
+            elif isinstance(value, tuple) and len(value) == 2:
+                axis.append(value)
+            else:
+                raise SyntaxError(f'Illegal axis {value!r}')
+        (low_step, low_acc), (high_step, high_acc) = axis
+        groups = [[(low_step + high_step - number, low_acc + high_acc - acc)
+                   for number, acc in group]
+                  for group in self.content.groups]
+        return Idea(Degrees(groups), self.rhythm)
+
+    def retrograde(self, retrograde_degrees=True, retrograde_rhythm=True):
+        """Play the idea backwards.
+
+        `retrograde_degrees` reverses the order of the notes,
+        `retrograde_rhythm` reverses the sequence of durations and rests,
+        and with both the whole idea plays backwards. The rhythm of the
+        result is one pass, with no loop marker.
+        """
+        play = self._realize()
+        steps = [(rest, duration) for rest, _, duration in play]
+        notes = [group for _, group, _ in play if group is not None]
+        if retrograde_rhythm:
+            steps = steps[::-1]
+        if retrograde_degrees:
+            notes = notes[::-1]
+        result = []
+        k = 0
+        for rest, duration in steps:
+            if self.content is None or rest:
+                result.append((rest, None, duration))
+            else:
+                result.append((False, notes[k], duration))
+                k += 1
+        content = Degrees(notes) if self.content is not None else None
+        if self.rhythm is None:
+            return Idea(content)
+        return Idea(content, rhythm_from_steps(
+            [(rest, duration) for rest, _, duration in result], 0))
+
 
     # ------------------------------------------------------------- display
 
@@ -317,11 +371,11 @@ class Idea:
                 for _, group, duration in self._realize()]
 
 
-def pitches(text):
+def pit(text):
     return Idea(parse_pitches(text))
 
-def degrees(text):
+def deg(text):
     return Idea(Degrees(parse_degrees(text)))
 
-def rhythm(text):
+def rhy(text):
     return Idea(rhythm=parse_rhythm(text))
