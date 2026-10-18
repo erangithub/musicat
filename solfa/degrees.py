@@ -95,7 +95,7 @@ def parse_degrees(text):
     return groups
 
 
-def stack_degrees(pattern1 : list[Degree], pattern2 : list[Degree]):
+def compose_degrees(pattern1 : list[Degree], pattern2 : list[Degree]):
     result = []
 
     for c2 in pattern2:
@@ -231,24 +231,20 @@ class Degrees:
 
     # ------------------------------------------------------------ operations
 
-    def compose(self, other):
+    def map(self, other):
         """`self` seen in `other`: every degree resolved/selected through the
         palette `other`. Chords of `self` are kept; `other`'s groups are flat."""
-        if not isinstance(other, Degrees):
-            raise SyntaxError(f'Cannot compose with {other!r}: expected degrees')
         return Degrees([[other._at(degree) for degree in group]
                         for group in self.groups])
 
-    def decompose(self, other, strict=False):
+    def unmap(self, other, strict=False):
         """`self`'s notes as (degree, accidental) in the palette `other`."""
-        if not isinstance(other, Degrees):
-            raise SyntaxError(f'Cannot decompose against {other!r}: expected degrees')
         return Degrees([[other._degree_of(number, acc, strict)
                          for number, acc in group] for group in self.groups])
 
-    def stack(self, other):
+    def compose(self, other):
         """Stack another degree pattern on top of this one (interval addition)."""
-        return Degrees(stack_degrees(self.groups, other.groups))
+        return Degrees(compose_degrees(self.groups, other.groups))
 
     def transpose(self, interval, up=True):
         """Move every note by a musical interval, measured through the white keys.

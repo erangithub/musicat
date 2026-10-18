@@ -78,7 +78,7 @@ class Idea:
 
     def __matmul__(self, other):
         if isinstance(other, Idea):
-            return self._layer(other)
+            return self.compose(other)
         raise SyntaxError(f'Cannot compose an idea with {other!r}: '
                           'use an idea, or * to repeat')
 
@@ -92,7 +92,7 @@ class Idea:
         raise SyntaxError(f'Cannot multiply {other!r} by an idea: '
                           'use an int to repeat')
 
-    def _layer(self, other):
+    def compose(self, other):
         """Fill the slots of both ideas into one; degrees with degrees stack,
         and a rhythm on the right replaces one on the left."""
         if self.content is None:
@@ -100,7 +100,7 @@ class Idea:
         elif other.content is None:
             content = self.content
         else:
-            content = self.content.stack(other.content)
+            content = self.content.compose(other.content)
 
         if other.rhythm:
             rhythm = other.rhythm              # the right-hand rhythm wins
@@ -218,14 +218,14 @@ class Idea:
     def __rshift__(self, palette):
         if self.content is None:
             raise SyntaxError('A rhythm-only idea has nothing to resolve')
-        content = self.content.compose(palette.content if isinstance(palette, Idea)
+        content = self.content.map(palette.content if isinstance(palette, Idea)
                                        else palette)
         return Idea(content, self.rhythm)
 
     def __lshift__(self, palette):
         if self.content is None:
             raise SyntaxError('A rhythm-only idea has nothing to resolve')
-        content = self.content.decompose(palette.content if isinstance(palette, Idea)
+        content = self.content.unmap(palette.content if isinstance(palette, Idea)
                                          else palette)
         return Idea(content, self.rhythm)
 
