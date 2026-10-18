@@ -22,7 +22,7 @@ def _parse_degree(text):
 # <  >  ..  step:  degree  whitespace.  The step is tried before the degree so that
 # '10:' is a step and not the degree '1'; a degree may not run straight into
 # another digit or a minus sign ('1b2', '5-3').
-_TOKEN = re.compile(r'(<)|(>)|(\.\.)|(\d+):|(-?\d+(?:b+|#+)?)(?![-\d])|\s+')
+_TOKEN = re.compile(r'(<)|(>)|(\.\.)|(,,)||(\d+):|(-?\d+(?:b+|#+)?)(?![-\d])|\s+')
 
 
 def parse_degrees(text):
@@ -64,14 +64,21 @@ def parse_degrees(text):
             if in_range or not groups or len(groups[-1]) != 1:
                 raise SyntaxError(f'Illegal symbol near "{rest}"')
             in_range = True
-        elif match.group(4) is not None:                    # step:
+        elif match.group(4) is not None:                    # ,, (range w/ step 2 default)
+            if in_chord:
+                raise SyntaxError(f'A range cannot be inside a chord, near "{rest}"')
+            if in_range or not groups or len(groups[-1]) != 1:
+                raise SyntaxError(f'Illegal symbol near "{rest}"')
+            in_range = True
+            in_step = 2
+        elif match.group(5) is not None:                    # step:
             if not in_range or in_step is not None:
                 raise SyntaxError(f'Illegal step near "{rest}"')
-            in_step = int(match.group(4))
+            in_step = int(match.group(5))
             if in_step == 0:
                 raise SyntaxError(f'A range cannot have a step of 0, near "{rest}"')
-        elif match.group(5) is not None:                    # degree
-            d, acc = _parse_degree(match.group(5))
+        elif match.group(6) is not None:                    # degree
+            d, acc = _parse_degree(match.group(6))
             if in_range:
                 (prev_d, _) = groups[-1][0]
                 step = 1 if d > prev_d else -1
