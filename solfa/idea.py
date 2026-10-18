@@ -103,12 +103,13 @@ class Idea:
             content = self.content.compose(other.content)
 
         if other.rhythm:
-            rhythm = other.rhythm              # the right-hand rhythm wins
-        elif self.rhythm:
-            one_pass = [(rest, duration) for rest, _, duration in self._realize()]
-            rhythm = rhythm_from_steps(one_pass, 0)
+            if not other.content:
+                rhythm = other.rhythm
+            else:
+                one_pass = [(rest, duration) for rest, _, duration in other._realize()]
+                rhythm = rhythm_from_steps(one_pass, 0)
         else:
-            rhythm = None
+            rhythm = self.rhythm
         return Idea(content, rhythm)
 
     def _repeat(self, count):

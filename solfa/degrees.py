@@ -98,11 +98,11 @@ def parse_degrees(text):
 def compose_degrees(pattern1 : list[Degree], pattern2 : list[Degree]):
     result = []
 
-    for c2 in pattern2:
-        for c1 in pattern1:
+    for c1 in pattern1:
+        for c2 in pattern2:
             res_chord = []
-            for d2, a2 in c2:
-                for d1, a1 in c1:
+            for d1, a1 in c1:
+                for d2, a2 in c2:
                     res_chord.append((d1+d2-1, a1+a2))
             result.append(res_chord)
 
