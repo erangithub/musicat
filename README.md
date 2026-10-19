@@ -86,7 +86,7 @@ durations it actually plays, so `i[:2] + i[2:]` plays the same as `i`, and an em
 empty idea:
 
 ```python
-melody = deg('1 2 3 4 5') @ rhy('4 |: 8')
+melody = deg('1 2 3 4 5') @ rhy('4 [8')
 melody[0]        # deg('1') @ rhy('4')
 melody[0:-3]     # deg('1 2') @ rhy('4 8')
 melody[-2:]      # deg('4 5') @ rhy('8 8')
@@ -139,10 +139,15 @@ major_scale('f')            # deg('4n 5n 6n 7b 8n 9n 10n 11n')  = f4 g4 a4 bb4 c
 
 ## Rhythm and events
 
-Durations are whole-note relative `Fraction`s (`1` is a whole, `1/4` a quarter). A rhythm loops over
-the content; `|:` marks where the repeating part starts (`'4 |: 8'` is a quarter then eighths forever)
-and `r` prefixes a rest (`'r4'`). `_realize`/`events()` unroll an idea into `(pitch group, duration)`
-pairs, which is what rendering consumes:
+Durations are whole-note relative `Fraction`s (`1` is a whole, `4` a quarter). A bare number is `1/n`
+of a whole, dots lengthen it (`4.`, `4..`), `r` prefixes a rest (`r4`), and a `+`-joined chain is one
+longer event (`4+8` is a dotted quarter). A trailing `*n` repeats a token (`8*3`), and `[ ... ]` groups
+nest and may be repeated; `[k: ...]` is a tuplet, the notes sitting in the time of the largest power of
+two below `k` (`[3: 8 8 8]`, `[7:8 16*7]`). A rhythm loops over the content. An unclosed `[` marks where
+the repeating part starts (`'4 [8'` is a quarter then eighths forever); without one the whole rhythm
+repeats. On its own a cycling rhythm is infinite, so it needs content or a bounded slice.
+`_realize`/`events()` unroll an idea into `(pitch group, duration)` pairs, which is what rendering
+consumes:
 
 ```python
 (deg('1 2 3') @ rhy('4 8')).events()   # [(c4, 1/4), (d4, 1/8), (e4, 1/4)]
@@ -165,7 +170,9 @@ score.show()        # or melody.show() for a single line
 `mock/probe.musicxml`); `show_score(score)` renders a whole score. Durations map to MusicXML note
 types, dots and tuplet ratios, and `divisions` is derived from the least common multiple of the
 denominators so every duration lands on a whole tick. Beaming follows the meter, rests and lone
-notes break runs, and beams never cross a barline.
+notes break runs, and beams never cross a barline. A note that would cross a barline is split at the
+bar and tied. Accidentals are written where they change the sound: a sharp or flat when it alters a
+pitch, and a natural when a note cancels an accidental already written earlier in the same bar.
 
 ## Current API
 
@@ -174,7 +181,7 @@ notes break runs, and beams never cross a barline.
 | `Idea(content=None, rhythm=None)` | Content (a `Degrees`) plus a rhythm. Empty is the identity for `+`. |
 | `pit(text)` | Parses `c`, `f#`, `bb3`, `<c e g>` into an `Idea` of degrees (letter input sugar; pitches are absolute, so accidentals come out written). |
 | `deg(text)` | Parses `1 3 5`, `<1 3 5>`, `1..5`, `2#`, `4n` into an `Idea` of degrees; a bare number is scale-relative, `n`/`#`/`b` are final. |
-| `rhy(text)` | Parses `4 8 r4 \|: 16` into a rhythm-only `Idea`. |
+| `rhy(text)` | Parses `4 8 r4 [16` into a rhythm-only `Idea`. |
 | `idea @ other` | Compose: layer a rhythm onto notes (either way round), stack degrees (left is the outer loop); a rhythm on the right replaces one on the left. |
 | `idea * other` | Repeat by an int (`idea * 3`). |
 | `idea + other` | Play this idea, then `other`. |

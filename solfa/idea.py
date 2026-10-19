@@ -39,9 +39,9 @@ class Idea:
     they play — carrying the durations it actually plays, so the pieces
     recombine with `+`.
 
-    A rhythm loops over the content: with no loop marker the whole rhythm
-    repeats, and '|:' marks where the repeating part starts ('4 |: 8' is a
-    quarter and then eighths forever).
+    A rhythm loops over the content: with no open group the whole rhythm
+    repeats, and '[' marks where the repeating part starts ('4 [8' is a quarter
+    and then eighths forever). On its own such a cycling rhythm is infinite.
     """
 
     def __init__(self, content=None, rhythm=None):
@@ -57,7 +57,7 @@ class Idea:
 
     def __repr__(self):
         """The expression that builds this idea, e.g.
-        deg('1 3 5') @ rhy('4 r4 |: 8'). Long ideas are cut short with
+        deg('1 3 5') @ rhy('4 r4 [8'). Long ideas are cut short with
         '…' (those reprs are for reading, not for eval)."""
         parts = []
         if self.content is not None:
@@ -108,7 +108,7 @@ class Idea:
                 rhythm = other.rhythm
             else:
                 one_pass = [(rest, duration) for rest, _, duration in other._realize()]
-                rhythm = rhythm_from_steps(one_pass, 0)
+                rhythm = rhythm_from_steps(one_pass)
         else:
             rhythm = self.rhythm
         return Idea(content, rhythm)
@@ -133,7 +133,7 @@ class Idea:
         if self.rhythm is None:
             return Idea(content)
         one_pass = [(rest, duration) for rest, _, duration in self._realize()]
-        return Idea(content, rhythm_from_steps(one_pass, 0))
+        return Idea(content, rhythm_from_steps(one_pass))
 
     def trans(self, interval, up=True):
         """Move every note by a musical interval, measured through the white keys.
@@ -165,7 +165,7 @@ class Idea:
 
         If both have a rhythm, this idea's rhythm is unrolled over its own
         notes (trailing rests included) and then `other`'s rhythm follows,
-        loop marker and all. If only `other` has a rhythm, this idea's notes
+        open group and all. If only `other` has a rhythm, this idea's notes
         each take its first duration. If only this idea has one, it simply
         continues over the notes of `other`; a rhythm of only rests has
         nothing to continue over, so it sounds once and `other`'s notes then
@@ -206,9 +206,11 @@ class Idea:
                     # pure silence has no slots to continue over: the rests
                     # sound once and other's notes take the pulse it sets
                     return rhythm_from_steps(
-                        steps + [(False, steps[0][1])] * len(other.content), 0)
+                        steps + [(False, steps[0][1])] * len(other.content))
             return self.rhythm                      # continues over the joined notes
         b_steps, b_loop = rhythm_steps(other.rhythm)
+        if b_loop is None:
+            b_loop = 0
         if self.rhythm is None:
             a_steps = [(False, b_steps[0][1])] * len(self.content)
         else:
@@ -295,7 +297,7 @@ class Idea:
         `retrograde_degrees` reverses the order of the notes,
         `retrograde_rhythm` reverses the sequence of durations and rests,
         and with both the whole idea plays backwards. The rhythm of the
-        result is one pass, with no loop marker.
+        result is one pass, with no open group.
         """
         play = self._realize()
         steps = [(rest, duration) for rest, _, duration in play]
@@ -316,7 +318,7 @@ class Idea:
         if self.rhythm is None:
             return Idea(content)
         return Idea(content, rhythm_from_steps(
-            [(rest, duration) for rest, _, duration in result], 0))
+            [(rest, duration) for rest, _, duration in result]))
 
 
     # ------------------------------------------------------------- display
@@ -334,10 +336,43 @@ class Idea:
         negatives, ranges, steps. A slice keeps the durations it actually
         plays, so slicing and recombining with `+` reproduces the original; an
         empty selection is the empty idea. Out-of-range indexes raise
-        IndexError.
+        IndexError. A rhythm-only idea left cycling is infinite: a non-negative
+        index and a bounded slice sample it, a slice with no stop keeps it
+        cycling, and reading it from the end is an error.
         """
         if not isinstance(key, (int, slice)):
             raise TypeError(f'Idea indices must be integers or slices, not {type(key).__name__}')
+        if not self.content and self.rhythm:
+            steps, loop_start = rhythm_steps(self.rhythm)
+            if loop_start is not None:
+                prefix, tail = steps[:loop_start], steps[loop_start:]
+                if isinstance(key, int):
+                    if key < 0:
+                        raise SyntaxError('Cannot read an infinite rhythm from the end')
+                    step = prefix[key] if key < loop_start else tail[(key - loop_start) % len(tail)]
+                    return Idea(rhythm=rhythm_from_steps([step]))
+                start = 0 if key.start is None else key.start
+                stop = key.stop
+                step = 1 if key.step is None else key.step
+                if start < 0 or step < 1 or (stop is not None and stop < 0):
+                    raise SyntaxError('Cannot read an infinite rhythm from the end')
+                if stop is not None:
+                    chosen = []
+                    i = start
+                    while i < stop:
+                        chosen.append(prefix[i] if i < loop_start
+                                      else tail[(i - loop_start) % len(tail)])
+                        i += step
+                    if not chosen:
+                        return Idea()
+                    return Idea(rhythm=rhythm_from_steps(chosen))
+                if step != 1:
+                    raise SyntaxError('Cannot read an infinite rhythm with a step and no stop')
+                if start < loop_start:
+                    new_steps = prefix[start:] + tail
+                    return Idea(rhythm=rhythm_from_steps(new_steps, loop_start - start))
+                offset = (start - loop_start) % len(tail)
+                return Idea(rhythm=rhythm_from_steps(tail[offset:] + tail[:offset], 0))
         play = [] if not self.content and not self.rhythm else self._realize()
         picked = play[key]
         if isinstance(key, int):
@@ -351,7 +386,7 @@ class Idea:
         if self.rhythm is None:
             return Idea(content)
         return Idea(content, rhythm_from_steps([(rest, duration)
-                                                for rest, _, duration in picked], 0))
+                                                for rest, _, duration in picked]))
 
     def show(self, time='4/4'):
         from . import Part
@@ -369,17 +404,21 @@ class Idea:
         for the steps of a rhythm-only idea. Every note of the content is used
         exactly once. Rests written after the last note, in the same pass of the
         rhythm, are kept ('4 4 r2' over two notes ends with the half rest); a
-        rest that only begins the next pass of the loop is not.
+        rest that only begins the next pass of the loop is not. A rhythm-only
+        idea left cycling has no last event to stop at: it is infinite.
         """
         if self.rhythm:
             steps, loop_start = rhythm_steps(self.rhythm)
         else:
-            steps, loop_start = [(False, WHOLE)], 0
+            steps, loop_start = [(False, WHOLE)], None
         groups = self.content.groups if self.content is not None else None
         if not groups:
+            if loop_start is not None:
+                raise SyntaxError('infinite rhythm; pair it with degrees or slice it')
             return [(rest, None, duration) for rest, duration in steps]
         sounding = sum(1 for rest, _ in steps if not rest)
-        if len(groups) > sounding and all(rest for rest, _ in steps[loop_start:]):
+        start = 0 if loop_start is None else loop_start
+        if len(groups) > sounding and all(rest for rest, _ in steps[start:]):
             raise SyntaxError('The looping part of the rhythm has no sounding '
                               'notes to put the content on')
         result = []
@@ -394,7 +433,7 @@ class Idea:
                 used += 1
             k += 1
             if k == len(steps) and used < len(groups):
-                k = loop_start
+                k = start
         while k < len(steps) and steps[k][0]:
             result.append((True, None, steps[k][1]))
             k += 1

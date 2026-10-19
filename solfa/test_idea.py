@@ -3,7 +3,7 @@ from fractions import Fraction as F
 
 from solfa import (Idea, Degrees, Part, SyntaxError, format_pitches,
                      deg, major_scale, minor_scale, pit, rhy)
-from solfa.rhythm import (LOOP_MARKER, REST_MARKER, parse_rhythm,
+from solfa.rhythm import (OPEN_MARKER, REST_MARKER, parse_rhythm,
                             rhythm_from_steps, rhythm_steps)
 
 SIXTH_DIM = pit('c4 d e f g ab a b c5')
@@ -37,41 +37,78 @@ def test_rhythm_parse_basics():
     assert parse_rhythm('4 8') == [F(1, 4), F(1, 8)]
     assert parse_rhythm('1 2') == [F(1), F(1, 2)]
     assert parse_rhythm('r4') == [REST_MARKER, F(1, 4)]
-    assert parse_rhythm('3/4') == [F(3, 4)]
-    assert parse_rhythm('12/8') == [F(3, 2)]            # multi-digit numerator
     assert parse_rhythm('4.') == [F(3, 8)]
     assert parse_rhythm('4..') == [F(7, 16)]
     assert parse_rhythm('r4.') == [REST_MARKER, F(3, 8)]
+    assert parse_rhythm('') == []
 
 
-def test_rhythm_loop_marker_parse():
-    assert parse_rhythm('4 |: 8') == [F(1, 4), LOOP_MARKER, F(1, 8)]
-    assert parse_rhythm('|: 4 8') == [LOOP_MARKER, F(1, 4), F(1, 8)]
+def test_rhythm_chains_are_one_event():
+    assert parse_rhythm('4+8') == [F(3, 8)]
+    assert parse_rhythm('4+8+16') == [F(7, 16)]
+    assert parse_rhythm('8+8') == [F(1, 4)]
+    assert parse_rhythm('r4+8') == [REST_MARKER, F(3, 8)]   # 'r' covers the chain
+    assert parse_rhythm('4+8*2') == [F(3, 8), F(3, 8)]     # '*n' repeats the token
+    assert parse_rhythm('2*5') == [F(1, 2)] * 5
 
 
-@pytest.mark.parametrize('text', ['0', '1/0', '0/4', 'x', 'r', '/4', '4|:8', '4 |:'])
+def test_rhythm_groups_expand_and_nest():
+    assert parse_rhythm('[4 8]') == [F(1, 4), F(1, 8)]
+    assert parse_rhythm('[4 8]*2') == [F(1, 4), F(1, 8)] * 2
+    assert parse_rhythm('[3: 8 8 8]') == [F(1, 12)] * 3     # three in the time of two
+    assert parse_rhythm('[3: 8*3]') == parse_rhythm('[3: 8 8 8]')
+    assert sum(parse_rhythm('[5: 16*5]')) == F(1, 4)
+    assert sum(parse_rhythm('[7: 16*7]')) == F(1, 4)
+    assert sum(parse_rhythm('[7:8 16*7]')) == F(1, 2)       # '[k:j' overrides the ratio
+    assert parse_rhythm('[3: 4 [3: 8 8 8] 4]')[1] == F(1, 18)
+    assert sum(parse_rhythm('[3: 8+8]')) == F(1, 6)
+
+
+def test_rhythm_open_group_cycles():
+    assert parse_rhythm('4 [8') == [F(1, 4), OPEN_MARKER, F(1, 8)]
+    assert parse_rhythm('[4 8') == [OPEN_MARKER, F(1, 4), F(1, 8)]
+    assert parse_rhythm('[3: 8 8') == [OPEN_MARKER, F(1, 12), F(1, 12)]
+
+
+def test_rhythm_spec_examples():
+    assert rhy('2*5') == rhy('2 2 2 2 2')
+    assert rhy('4+8') == rhy('4.')
+    assert rhy('4+8+16') == rhy('4..')
+    assert rhy('8+8') == rhy('4')
+    assert rhy('4+8*2') == rhy('4+8 4+8')
+    assert rhy('[3: 8*3]') == rhy('[3: 8 8 8]')
+    assert sum([d for _, d in (deg('1 2') @ rhy('4+4 4')).events()]) == F(3, 4)
+    assert [d for _, d in (deg('1 2') @ rhy('4+4 4')).events()] == [F(1, 2), F(1, 4)]
+    assert [d for _, d in (deg('1 2 3 4 5') @ rhy('8 [16')).events()] == \
+        [F(1, 8), F(1, 16), F(1, 16), F(1, 16), F(1, 16)]
+
+
+@pytest.mark.parametrize('text', ['0', '1/0', '0/4', 'x', 'r', '/4', '3/4', '12/8',
+                                  '4|:8', '4+r8', '8]', '4 [8 [16'])
 def test_rhythm_illegal(text):
     with pytest.raises(SyntaxError):
         parse_rhythm(text)
 
 
-def test_rhythm_loop_marker_errors():
-    with pytest.raises(SyntaxError, match='Only one loop marker'):
-        parse_rhythm('4 |: 8 |: 16')
-    with pytest.raises(SyntaxError, match='runs to the end'):
-        parse_rhythm('4 8 :|')
-    with pytest.raises(SyntaxError, match='Nothing to loop'):
-        parse_rhythm('4 |:')
+def test_rhythm_errors():
+    with pytest.raises(SyntaxError, match='is gone'):        # the old '|:' marker
+        parse_rhythm('4 |: 8')
+    with pytest.raises(SyntaxError, match='Nothing to cycle'):
+        parse_rhythm('4 [')
+    with pytest.raises(SyntaxError, match='Nothing to repeat'):
+        parse_rhythm('*3')
+    with pytest.raises(SyntaxError, match='left open'):
+        parse_rhythm('4 [8 [16')
 
 
 def test_rhythm_steps_roundtrip():
-    r = parse_rhythm('4 r8 |: 16 2')
+    r = parse_rhythm('4 r8 [16 2')
     steps, loop = rhythm_steps(r)
     assert steps == [(False, F(1, 4)), (True, F(1, 8)), (False, F(1, 16)), (False, F(1, 2))]
     assert loop == 2
     assert rhythm_from_steps(steps, loop) == r
-    # the default loop (everything) is written without a marker
-    assert rhythm_from_steps(steps, 0) == parse_rhythm('4 r8 16 2')
+    # a flat rhythm is written without an open marker
+    assert rhythm_from_steps(steps) == parse_rhythm('4 r8 16 2')
 
 
 # ---------------------------------------------------------------- two slots
@@ -86,14 +123,14 @@ def test_slots_and_compat_properties():
     assert rhy('4').content is None
     # indexing reads the realized events — notes and rests in play order — and
     # a slice carries the durations it actually plays
-    m = pit('c d e f') @ rhy('4 |: 8')
+    m = pit('c d e f') @ rhy('4 [8')
     assert m[0] == m[-4] == pit('c') @ rhy('4') == m[0:1]
     assert m[1] == pit('d') @ rhy('8')
     assert m[0:2] == pit('c d') @ rhy('4 8')
     assert m[::2] == pit('c e') @ rhy('4 8')
     assert m[-2:] == pit('e f') @ rhy('8 8')
     assert m[4:9] == Idea() and m[0:0] == Idea()
-    assert m.rhythm == [F(1, 4), LOOP_MARKER, F(1, 8)]           # the original keeps its marker
+    assert m.rhythm == [F(1, 4), OPEN_MARKER, F(1, 8)]           # the original keeps its marker
     assert len(m) == 4
     assert (m[:2] + m[2:]).events() == m.events()                # the pieces recombine
     assert [x.content.groups for x in m] == [[[(1, 0)]], [[(2, 0)]],
@@ -128,7 +165,8 @@ def test_equality_and_repr():
     assert len(deg('1 2 3')) == 3 and len(Idea()) == 0
     assert Idea(rhythm=[]) == Idea()                       # empty rhythm is no rhythm
     assert len(rhy('4 r8')) == 2                        # a rest is one step, not two
-    assert len(rhy('4 |: 8')) == 2                      # a loop marker is not a step
+    # an open marker is not a step: it only says where cycling starts
+    assert rhythm_steps(rhy('4 [8').rhythm) == ([(False, F(1, 4)), (False, F(1, 8))], 1)
 
 
 # ------------------------------------------ @ : composing (layer and stack)
@@ -155,7 +193,7 @@ def test_stacking_keeps_whichever_rhythm_exists():
     assert deg('2#') @ deg('3b') == deg('4n')
     # when both sides carry a rhythm, the right-hand one replaces the left
     assert rhy('4') @ rhy('8') == rhy('8')
-    retime = (deg('1 2') @ rhy('4 |: 8')) @ rhy('2')
+    retime = (deg('1 2') @ rhy('4 [8')) @ rhy('2')
     assert retime == deg('1 2') @ rhy('2')
     stacked = (deg('1 2') @ rhy('4')) @ (deg('1 3') @ rhy('8'))
     assert stacked == deg('1 3 2 4') @ rhy('8 8')
@@ -196,15 +234,15 @@ def test_repeat_realizes_the_rhythm_once_and_loops():
     assert durations(r) == [F(1, 4), F(1, 8), F(1, 4), F(1, 8)]
     # the rhythm does not grow with the count
     assert (a * 1000).rhythm == [F(1, 4), F(1, 8)] and len(a * 1000) == 2000
-    # a loop marker inside the rhythm is unrolled for one pass, so each pass restarts it
-    b = pit('c d e') @ rhy('4 |: 8') * 2
+    # an open group inside the rhythm is unrolled for one pass, so each pass restarts it
+    b = pit('c d e') @ rhy('4 [8') * 2
     assert b.rhythm == [F(1, 4), F(1, 8), F(1, 8)]
     assert durations(b) == [F(1, 4), F(1, 8), F(1, 8)] * 2
 
 
 _REPEAT_NOTES = ['c', 'c d', 'c d e', 'c d e f g']
-_REPEAT_RHYTHMS = ['8', '4 8', '4 |: 8', '4 4 r2', 'r4 4', 'r4 |: 4', '4 |: r8 8',
-                   '2 r4 4 |: 8 16', 'r8 4 r8', '4 r4 r8 8']
+_REPEAT_RHYTHMS = ['8', '4 8', '4 [8', '4 4 r2', 'r4 4', 'r4 [4', '4 [r8 8',
+                   '2 r4 4 [8 16', 'r8 4 r8', '4 r4 r8 8']
 
 
 @pytest.mark.parametrize('rhythm_text', _REPEAT_RHYTHMS)
@@ -224,7 +262,7 @@ def test_repeat_leaves_the_original_alone_and_rhythm_only_stays_explicit():
     a * 3
     assert repr(a) == before
     r = rhy('4 8') * 2                    # nothing to loop over: written out
-    assert r.rhythm == [F(1, 4), F(1, 8), LOOP_MARKER, F(1, 4), F(1, 8)]
+    assert r.rhythm == [F(1, 4), F(1, 8), OPEN_MARKER, F(1, 4), F(1, 8)]
     assert (deg('1 2') @ rhy('4') * 3).content.groups == \
         deg('1 2 1 2 1 2').content.groups
 
@@ -259,9 +297,9 @@ def test_concat_neither_has_rhythm_invents_none():
 
 def test_concat_both_have_rhythm_keeps_b_loop():
     a = pit('c d') @ rhy('4 8')
-    b = pit('e f g') @ rhy('2 |: 16')
+    b = pit('e f g') @ rhy('2 [16')
     r = a + b
-    assert r.rhythm == [F(1, 4), F(1, 8), F(1, 2), LOOP_MARKER, F(1, 16)]
+    assert r.rhythm == [F(1, 4), F(1, 8), F(1, 2), OPEN_MARKER, F(1, 16)]
     assert ev(r) == [('c4', F(1, 4)), ('d4', F(1, 8)), ('e4', F(1, 2)),
                      ('f4', F(1, 16)), ('g4', F(1, 16))]
 
@@ -270,7 +308,7 @@ def test_concat_both_default_loop_b_restarts_its_own_pattern():
     a = pit('c d') @ rhy('4 8')
     b = pit('e f g') @ rhy('2 16')
     r = a + b
-    assert r.rhythm == [F(1, 4), F(1, 8), LOOP_MARKER, F(1, 2), F(1, 16)]
+    assert r.rhythm == [F(1, 4), F(1, 8), OPEN_MARKER, F(1, 2), F(1, 16)]
     assert durations(r) == [F(1, 4), F(1, 8), F(1, 2), F(1, 16), F(1, 2)]
 
 
@@ -302,7 +340,7 @@ def test_concat_keeps_trailing_rests_of_a():
 
 def test_concat_rhythm_only():
     r = rhy('4 8') + rhy('2')
-    assert r.rhythm == [F(1, 4), F(1, 8), LOOP_MARKER, F(1, 2)]
+    assert r.rhythm == [F(1, 4), F(1, 8), OPEN_MARKER, F(1, 2)]
     assert r.content is None
     # a rhythm that plays only rests carries no notes, so it concatenates
     # with notes as silence
@@ -444,11 +482,11 @@ def test_events_whole_rhythm_loops_by_default():
     assert durations(pit('c d e f') @ rhy('4 8')) == [F(1, 4), F(1, 8)] * 2
 
 
-def test_events_loop_marker():
-    assert durations(pit('c d e f') @ rhy('4 |: 8')) == [F(1, 4), F(1, 8), F(1, 8), F(1, 8)]
-    assert durations(pit('c d e f') @ rhy('|: 4 8')) == \
+def test_events_open_group():
+    assert durations(pit('c d e f') @ rhy('4 [8')) == [F(1, 4), F(1, 8), F(1, 8), F(1, 8)]
+    assert durations(pit('c d e f') @ rhy('[4 8')) == \
         durations(pit('c d e f') @ rhy('4 8'))
-    assert durations(pit('c d e f') @ rhy('4 8 |: 16')) == \
+    assert durations(pit('c d e f') @ rhy('4 8 [16')) == \
         [F(1, 4), F(1, 8), F(1, 16), F(1, 16)]
 
 
@@ -466,7 +504,7 @@ def test_events_rest_that_begins_the_next_pass_is_not_trailing():
     assert ev(pit('c') @ rhy('r4 4')) == [('rest', F(1, 4)), ('c4', F(1, 4))]
     assert ev(pit('c d') @ rhy('r4 4')) == [
         ('rest', F(1, 4)), ('c4', F(1, 4)), ('rest', F(1, 4)), ('d4', F(1, 4))]
-    assert ev(pit('c d e') @ rhy('4 |: r8 8')) == [
+    assert ev(pit('c d e') @ rhy('4 [r8 8')) == [
         ('c4', F(1, 4)), ('rest', F(1, 8)), ('d4', F(1, 8)), ('rest', F(1, 8)), ('e4', F(1, 8))]
     # a rest written at the end of the pass does trail
     assert ev(pit('c d') @ rhy('4 8 r8')) == [
@@ -475,27 +513,48 @@ def test_events_rest_that_begins_the_next_pass_is_not_trailing():
 
 def test_events_rhythm_only_plays_every_step_once():
     assert ev(rhy('4 4 r4')) == [('rest', F(1, 4))] * 3
-    assert durations(rhy('4 |: 8')) == [F(1, 4), F(1, 8)]
-    # a rhythm-only idea indexes its steps as they play — a rest never splits
-    # from its duration — and a slice drops the loop marker: it just plays the
-    # durations it carries, while + puts the marker back at the join
-    r = rhy('4 r8 |: 16')
+    assert durations(rhy('4 8')) == [F(1, 4), F(1, 8)]
+    # a flat rhythm-only idea indexes and slices as a list: a rest never splits
+    # from its duration, an empty selection is the empty idea
+    r = rhy('4 r8 16')
     assert r[0] == rhy('4') and r[-1] == rhy('16')
     assert r[1:] == rhy('r8 16') and r[:2] == rhy('4 r8')
     assert r[::-1] == rhy('16 r8 4')
-    assert r[:2] + r[2:] == r
     assert r[3:] == Idea()
     with pytest.raises(IndexError):
         r[9]
 
 
-@pytest.mark.parametrize('text', ['r4', '4 |: r2', 'r4 |: r8'])
+def test_infinite_rhythm_needs_content_or_a_slice():
+    r = rhy('4 [8')
+    with pytest.raises(SyntaxError, match='infinite rhythm'):
+        r.events()
+    with pytest.raises(SyntaxError, match='infinite rhythm'):
+        rhy('[8').events()
+    # a non-negative index samples the cycle forever
+    assert r[0] == rhy('4') and r[1] == r[99] == rhy('8')
+    # a bounded slice samples a finite window
+    assert r[:2] == rhy('4 8') and r[:5] == rhy('4 8 8 8 8')
+    assert r[:6:2] == rhy('4 8 8')
+    # an unbounded step-1 slice keeps it cycling, so the pieces recombine
+    assert r[1:] == rhy('[8')
+    assert r[:1] + r[1:] == r
+    # reading it from the end is meaningless
+    with pytest.raises(SyntaxError):
+        r[-1]
+    with pytest.raises(SyntaxError):
+        r[::-1]
+    with pytest.raises(SyntaxError):
+        r[::2]
+
+
+@pytest.mark.parametrize('text', ['r4', '4 [r2', 'r4 [r8'])
 def test_events_loop_without_sounding_step_raises_not_hangs(text):
     with pytest.raises(SyntaxError, match='no sounding notes'):
         (pit('c d') @ rhy(text)).events()
     # the guard fires only when the content outlasts the sounding steps: a
     # rhythm that rests after its last note still realizes
-    assert durations(pit('c') @ rhy('4 |: r8')) == [F(1, 4), F(1, 8)]
+    assert durations(pit('c') @ rhy('4 [r8')) == [F(1, 4), F(1, 8)]
 
 
 def test_events_degrees_resolve_through_the_base():
@@ -517,7 +576,7 @@ def test_degrees_to_pitches():
 
 
 def test_rhythm_survives_both_directions():
-    r = rhy('4 r4 |: 2')
+    r = rhy('4 r4 [2')
     there = (deg('1 2') @ r) >> major_scale('c')
     back = there << major_scale('c')
     assert there.rhythm == back.rhythm == r.rhythm
@@ -640,15 +699,15 @@ def roundtrips(idea):
 def test_repr_reads_like_the_expression_that_builds_it():
     assert repr(pit('c d e')) == "deg('1n 2n 3n')"    # pitches are final, so they print 'n'
     assert repr(deg('1 2 3')) == "deg('1 2 3')"
-    assert repr(rhy('4 r4 |: 8')) == "rhy('4 r4 |: 8')"
+    assert repr(rhy('4 r4 [8')) == "rhy('4 r4 [8')"
     assert repr(pit('c d') @ rhy('4')) == "deg('1n 2n') @ rhy('4')"
     assert repr(deg('<1 3 5> 2#') @ rhy('2')) == "deg('<1 3 5> 2#') @ rhy('2')"
     assert repr(Idea()) == 'Idea()'
 
 
-def test_repr_shows_the_loop_marker_that_plus_inserts():
-    r = pit('c d') @ rhy('4 8') + pit('e') @ rhy('2 |: 16')
-    assert repr(r) == "deg('1n 2n 3n') @ rhy('4 8 2 |: 16')"
+def test_repr_shows_the_open_marker_that_plus_inserts():
+    r = pit('c d') @ rhy('4 8') + pit('e') @ rhy('2 [16')
+    assert repr(r) == "deg('1n 2n 3n') @ rhy('4 8 2 [16')"
 
 
 def test_repr_of_a_repeated_idea_stays_compact():
@@ -656,8 +715,9 @@ def test_repr_of_a_repeated_idea_stays_compact():
     assert repr(r) == "deg('1n 2n 1n 2n') @ rhy('4 8')"
 
 
-def test_repr_prefers_dotted_durations():
-    assert repr(rhy('4. 2.. 3/8 1/1 2/1')) == "rhy('4. 2.. 4. 1 2/1')"
+def test_repr_prefers_dotted_and_chain_durations():
+    assert repr(rhy('4+8 4+8+16 8+8 1 1+1')) == "rhy('4. 4.. 4 1 1+1')"
+    assert repr(rhy('5 8. 1+4')) == "rhy('5 8. 1+4')"
 
 
 EXAMPLES = [
@@ -669,13 +729,14 @@ EXAMPLES = [
     deg('1 2 3'),
     deg('<1 3 5> -1 2# 3b 0 -7bb'),
     rhy('4 8'),
-    rhy('4 r4 |: 8'),
-    rhy('|: 4 8'),
-    rhy('4. 2.. 3/8 12/8 2/1 1/12 5/8 7/16 3 r3 1/64 r1.'),
-    pit('c d e') @ rhy('4 r4 |: 8'),
+    rhy('4 r4 [8'),
+    rhy('[4 8'),
+    rhy('4. 2.. 1 12 2+8 7 r7 64 r8.'),
+    rhy('[3: 8 8 8]'),
+    pit('c d e') @ rhy('4 r4 [8'),
     deg('1 2') @ rhy('8'),
     rhy('8') @ deg('1 2 3') @ deg('0 1 2 3'),
-    (pit('c d') @ rhy('4 8')) + (pit('e f g') @ rhy('2 |: 16')),
+    (pit('c d') @ rhy('4 8')) + (pit('e f g') @ rhy('2 [16')),
     pit('c d') + pit('e') @ rhy('r4 8'),
     pit('c d e') @ rhy('4 8') * 2,
     pit('c d e') * 2 @ rhy('4 8'),
@@ -683,6 +744,7 @@ EXAMPLES = [
     rhy('4 8') + rhy('2'),
     deg('1 2 3 4 5') @ deg('<1 3 5 7 9>') >> SIXTH_DIM,
     deg('1 2 3 4 5') @ deg('<1 -1 -3 -5>') @ rhy('4') >> SIXTH_DIM,
+    pit('c d e f g') @ rhy('8 [16'),
 ]
 
 

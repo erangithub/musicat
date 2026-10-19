@@ -13,7 +13,7 @@ theme = deg('8') @ (deg ('1 3 5 0 1 2 1') @ rhy('2 4 4  4. 16 16 4 r4')
          + deg ('6 5 8 5 4 3 4 3') @ rhy('2 4 4  4 8 16 16 4 r4'))
 
 # bars 5-8: one scale figure, a step lower each bar
-run = deg('6..13..6') @ rhy('8 |: 16')
+run = deg('6..13..6') @ rhy('8 [16')
 runs = deg('1 0 -1 -2') @ run
 
 right_hand = theme + runs >> C
