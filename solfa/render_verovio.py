@@ -99,42 +99,65 @@ def show_score(score: Score):
         notes = []
         filled = 0
         for group, duration in events:
-            name, dots, actual, normal = _duration_type(duration)
-            dots_xml = '<dot/>' * dots
-            tuplet_xml = (f'<time-modification><actual-notes>{actual}</actual-notes>'
-                          f'<normal-notes>{normal}</normal-notes></time-modification>'
-                          if actual else '')
-            ticks = int(duration * units)
-            if not group:
-                body = (f'<note><rest/><duration>{ticks}</duration><voice>1</voice>'
-                        f'<type>{name}</type>{dots_xml}{tuplet_xml}</note>')
-            else:
-                body = ''
-                for i, (number, alter) in enumerate(group):
-                    alter = alter or 0
-                    run = '#' * alter if alter > 0 else 'b' * -alter
-                    symbol = acc_map[run]
-                    acc = f'<accidental>{symbol}</accidental>' if symbol else ''
-                    alt = f'<alter>{alter}</alter>' if alter else ''
-                    body += ('<note><chord/>' if i else '<note>') + (
-                        f'<pitch><step>{LETTERS[(number - 1) % 7].upper()}</step>{alt}'
-                        f'<octave>{(number - 1) // 7 + ORIGIN // 7}</octave></pitch>'
-                        f'<duration>{ticks}</duration><voice>1</voice>'
-                        f'<type>{name}</type>{dots_xml}{acc}{tuplet_xml}</note>')
-            if notes and filled + ticks > bar_ticks:
-                beams = _beams([(t, kind) for _, t, kind in notes], beat_ticks, group_ticks)
-                measures.append(''.join(
-                    note.replace('</note>', beam + '</note>', 1) if beam else note
-                    for (note, _, _), beam in zip(notes, beams)))
-                notes = []
-                filled = 0
-            notes.append((body, ticks, None if not group else name))
-            filled += ticks
+            # a note that would cross a barline is split at the bar and tied
+            # to its continuation, so every bar fills exactly
+            remaining = int(duration * units)
+            carried = False                     # a tie arriving from the last bar
+            while remaining > 0:
+                ticks = min(remaining, bar_ticks - filled)
+                name, dots, actual, normal = _duration_type(Fraction(ticks, units))
+                dots_xml = '<dot/>' * dots
+                tuplet_xml = (f'<time-modification><actual-notes>{actual}</actual-notes>'
+                              f'<normal-notes>{normal}</normal-notes></time-modification>'
+                              if actual else '')
+                start = ticks < remaining
+                if group:
+                    tie_xml = ('<tie type="stop"/>' if carried else '') \
+                        + ('<tie type="start"/>' if start else '')
+                    tied = ('continue' if carried and start else
+                            'stop' if carried else 'start' if start else None)
+                else:
+                    tie_xml, tied = '', None
+                if not group:
+                    body = (f'<note><rest/><duration>{ticks}</duration>{tie_xml}'
+                            f'<voice>1</voice>'
+                            f'<type>{name}</type>{dots_xml}{tuplet_xml}</note>')
+                else:
+                    body = ''
+                    for i, (number, alter) in enumerate(group):
+                        alter = alter or 0
+                        run = '#' * alter if alter > 0 else 'b' * -alter
+                        symbol = acc_map[run]
+                        acc = f'<accidental>{symbol}</accidental>' if symbol else ''
+                        alt = f'<alter>{alter}</alter>' if alter else ''
+                        body += ('<note><chord/>' if i else '<note>') + (
+                            f'<pitch><step>{LETTERS[(number - 1) % 7].upper()}</step>{alt}'
+                            f'<octave>{(number - 1) // 7 + ORIGIN // 7}</octave></pitch>'
+                            f'<duration>{ticks}</duration>{tie_xml}<voice>1</voice>'
+                            f'<type>{name}</type>{dots_xml}{acc}{tuplet_xml}</note>')
+                notes.append((body, ticks, None if not group else name, tied))
+                filled += ticks
+                remaining -= ticks
+                carried = start
+                if filled >= bar_ticks:
+                    beams = _beams([(t, kind) for _, t, kind, _ in notes],
+                                   beat_ticks, group_ticks)
+                    measures.append(''.join(
+                        (note.replace('</note>', beam + '</note>', 1) if beam else note)
+                        .replace('</note>',
+                                 (f'<notations><tied type="{k}"/></notations>' if k else '')
+                                 + '</note>')
+                        for (note, _, _, k), beam in zip(notes, beams)))
+                    notes = []
+                    filled = 0
         if notes:
-            beams = _beams([(t, kind) for _, t, kind in notes], beat_ticks, group_ticks)
+            beams = _beams([(t, kind) for _, t, kind, _ in notes], beat_ticks, group_ticks)
             measures.append(''.join(
-                note.replace('</note>', beam + '</note>', 1) if beam else note
-                for (note, _, _), beam in zip(notes, beams)))
+                (note.replace('</note>', beam + '</note>', 1) if beam else note)
+                .replace('</note>',
+                         (f'<notations><tied type="{k}"/></notations>' if k else '')
+                         + '</note>')
+                for (note, _, _, k), beam in zip(notes, beams)))
 
         attributes = (f'<attributes><divisions>{divisions}</divisions>'
                       '<key><fifths>0</fifths></key>'
