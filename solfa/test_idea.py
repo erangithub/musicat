@@ -1,10 +1,10 @@
 import pytest
 from fractions import Fraction as F
 
-from solfa import (Idea, Degrees, Part, SyntaxError, format_pitches,
+from solfa import (Idea, Degrees, Part, Score, SyntaxError, format_pitches,
                      deg, major_scale, minor_scale, pit, rhy)
-from solfa.rhythm import (OPEN_MARKER, REST_MARKER, parse_rhythm,
-                            rhythm_from_steps, rhythm_steps)
+from solfa.rhythm import (OpenMarker, CloseMarker, RestMarker, parse_rhythm,
+                          format_rhythm)
 
 SIXTH_DIM = pit('c4 d e f g ab a b c5')
 PALETTES = {
@@ -36,10 +36,10 @@ def durations(idea):
 def test_rhythm_parse_basics():
     assert parse_rhythm('4 8') == [F(1, 4), F(1, 8)]
     assert parse_rhythm('1 2') == [F(1), F(1, 2)]
-    assert parse_rhythm('r4') == [REST_MARKER, F(1, 4)]
+    assert parse_rhythm('r4') == [RestMarker(F(1, 4))]
     assert parse_rhythm('4.') == [F(3, 8)]
     assert parse_rhythm('4..') == [F(7, 16)]
-    assert parse_rhythm('r4.') == [REST_MARKER, F(3, 8)]
+    assert parse_rhythm('r4.') == [RestMarker(F(3, 8))]
     assert parse_rhythm('') == []
 
 
@@ -47,7 +47,7 @@ def test_rhythm_chains_are_one_event():
     assert parse_rhythm('4+8') == [F(3, 8)]
     assert parse_rhythm('4+8+16') == [F(7, 16)]
     assert parse_rhythm('8+8') == [F(1, 4)]
-    assert parse_rhythm('r4+8') == [REST_MARKER, F(3, 8)]   # 'r' covers the chain
+    assert parse_rhythm('r4+8') == [RestMarker(F(3, 8))]   # 'r' covers the chain
     assert parse_rhythm('4+8*2') == [F(3, 8), F(3, 8)]     # '*n' repeats the token
     assert parse_rhythm('2*5') == [F(1, 2)] * 5
 
@@ -55,22 +55,38 @@ def test_rhythm_chains_are_one_event():
 def test_rhythm_groups_expand_and_nest():
     assert parse_rhythm('[4 8]') == [F(1, 4), F(1, 8)]
     assert parse_rhythm('[4 8]*2') == [F(1, 4), F(1, 8)] * 2
-    assert parse_rhythm('[3: 8 8 8]') == [F(1, 12)] * 3     # three in the time of two
+    # three in the time of two: the written eighths, under a 3:2 marker
+    assert parse_rhythm('[3: 8 8 8]') == \
+        [OpenMarker(3, 2), F(1, 8), F(1, 8), F(1, 8), CloseMarker()]
     assert parse_rhythm('[3: 8*3]') == parse_rhythm('[3: 8 8 8]')
-    assert sum(parse_rhythm('[5: 16*5]')) == F(1, 4)
-    assert sum(parse_rhythm('[7: 16*7]')) == F(1, 4)
-    assert sum(parse_rhythm('[7 8: 16*7]')) == F(1, 2)      # '[k j:' overrides the ratio
+    assert sum(d for _, d in rhy('[5: 16*5]').events()) == F(1, 4)
+    assert sum(d for _, d in rhy('[7: 16*7]').events()) == F(1, 4)
+    assert sum(d for _, d in rhy('[7 8: 16*7]').events()) == F(1, 2)  # '[k j:' overrides
     assert parse_rhythm('[3 2: 8 8 8]') == parse_rhythm('[3: 8 8 8]')
-    assert parse_rhythm('[3: 4 [3: 8 8 8] 4]')[1] == F(1, 18)
-    assert sum(parse_rhythm('[3: 8+8]')) == F(1, 6)
+    nested = parse_rhythm('[3: 4 [3: 8 8 8] 4]')
+    assert nested == [OpenMarker(3, 2), F(1, 4),
+                      OpenMarker(3, 2), F(1, 8), F(1, 8), F(1, 8), CloseMarker(),
+                      F(1, 4), CloseMarker()]
+    assert sum(d for _, d in rhy('[3: 8+8]').events()) == F(1, 6)
     # a bare number after '[' is a duration, not a tuplet numerator
     assert parse_rhythm('[3 8 8 8]') == [F(1, 3), F(1, 8), F(1, 8), F(1, 8)]
 
 
 def test_rhythm_open_group_cycles():
-    assert parse_rhythm('4 [8') == [F(1, 4), OPEN_MARKER, F(1, 8)]
-    assert parse_rhythm('[4 8') == [OPEN_MARKER, F(1, 4), F(1, 8)]
-    assert parse_rhythm('[3: 8 8') == [OPEN_MARKER, F(1, 12), F(1, 12)]
+    assert parse_rhythm('4 [8') == [F(1, 4), OpenMarker(), F(1, 8)]
+    assert parse_rhythm('[4 8') == [OpenMarker(), F(1, 4), F(1, 8)]
+    assert parse_rhythm('[3: 8 8') == [OpenMarker(3, 2), F(1, 8), F(1, 8)]
+    # nested unclosed brackets: the innermost one is the loop
+    assert parse_rhythm('[3: 8 [3: 8 8') == \
+        [OpenMarker(3, 2), F(1, 8), OpenMarker(3, 2), F(1, 8), F(1, 8)]
+    assert parse_rhythm('4 [8 [16') == [F(1, 4), F(1, 8), OpenMarker(), F(1, 16)]
+
+
+def test_rhythm_format_roundtrip():
+    for text in ('4 r8 [16 2', '[3: 8 8 8]', '[7 8: 16*7]',
+                 '[3: 8 8', '[3: 4 [3: 8 8 8] 4]',
+                 '[3: 8 [3: 8 8', '4 [8 [16'):
+        assert parse_rhythm(format_rhythm(parse_rhythm(text))) == parse_rhythm(text)
 
 
 def test_rhythm_spec_examples():
@@ -87,7 +103,7 @@ def test_rhythm_spec_examples():
 
 
 @pytest.mark.parametrize('text', ['0', '1/0', '0/4', 'x', 'r', '/4', '3/4', '12/8',
-                                  '4|:8', '4+r8', '8]', '4 [8 [16'])
+                                  '4|:8', '4+r8', '8]'])
 def test_rhythm_illegal(text):
     with pytest.raises(SyntaxError):
         parse_rhythm(text)
@@ -102,18 +118,6 @@ def test_rhythm_errors():
         parse_rhythm('4 [')
     with pytest.raises(SyntaxError, match='Nothing to repeat'):
         parse_rhythm('*3')
-    with pytest.raises(SyntaxError, match='left open'):
-        parse_rhythm('4 [8 [16')
-
-
-def test_rhythm_steps_roundtrip():
-    r = parse_rhythm('4 r8 [16 2')
-    steps, loop = rhythm_steps(r)
-    assert steps == [(False, F(1, 4)), (True, F(1, 8)), (False, F(1, 16)), (False, F(1, 2))]
-    assert loop == 2
-    assert rhythm_from_steps(steps, loop) == r
-    # a flat rhythm is written without an open marker
-    assert rhythm_from_steps(steps) == parse_rhythm('4 r8 16 2')
 
 
 # ---------------------------------------------------------------- two slots
@@ -135,7 +139,7 @@ def test_slots_and_compat_properties():
     assert m[::2] == pit('c e') @ rhy('4 8')
     assert m[-2:] == pit('e f') @ rhy('8 8')
     assert m[4:9] == Idea() and m[0:0] == Idea()
-    assert m.rhythm == [F(1, 4), OPEN_MARKER, F(1, 8)]           # the original keeps its marker
+    assert m.rhythm == [F(1, 4), OpenMarker(), F(1, 8)]           # the original keeps its marker
     assert len(m) == 4
     assert (m[:2] + m[2:]).events() == m.events()                # the pieces recombine
     assert [x.content.groups for x in m] == [[[(1, 0)]], [[(2, 0)]],
@@ -148,7 +152,7 @@ def test_slots_and_compat_properties():
     # pieces still join back with +
     t = pit('c d e') @ rhy('r4 4 r4')
     assert t[1] == pit('c') @ rhy('4')
-    assert t[0].content == Degrees([]) and t[0].rhythm == ['r', F(1, 4)]
+    assert t[0].content == Degrees([]) and t[0].rhythm == [RestMarker(F(1, 4))]
     assert (t[:2] + t[2:]).events() == t.events()
     assert (t[:1] + t[1:3] + t[3:]).events() == t.events()
 
@@ -171,7 +175,7 @@ def test_equality_and_repr():
     assert Idea(rhythm=[]) == Idea()                       # empty rhythm is no rhythm
     assert len(rhy('4 r8')) == 2                        # a rest is one step, not two
     # an open marker is not a step: it only says where cycling starts
-    assert rhythm_steps(rhy('4 [8').rhythm) == ([(False, F(1, 4)), (False, F(1, 8))], 1)
+    assert rhy('4 [8').rhythm == [F(1, 4), OpenMarker(), F(1, 8)]
 
 
 # ------------------------------------------ @ : composing (layer and stack)
@@ -267,7 +271,7 @@ def test_repeat_leaves_the_original_alone_and_rhythm_only_stays_explicit():
     a * 3
     assert repr(a) == before
     r = rhy('4 8') * 2                    # nothing to loop over: written out
-    assert r.rhythm == [F(1, 4), F(1, 8), OPEN_MARKER, F(1, 4), F(1, 8)]
+    assert r.rhythm == [F(1, 4), F(1, 8), OpenMarker(), F(1, 4), F(1, 8)]
     assert (deg('1 2') @ rhy('4') * 3).content.groups == \
         deg('1 2 1 2 1 2').content.groups
 
@@ -304,7 +308,7 @@ def test_concat_both_have_rhythm_keeps_b_loop():
     a = pit('c d') @ rhy('4 8')
     b = pit('e f g') @ rhy('2 [16')
     r = a + b
-    assert r.rhythm == [F(1, 4), F(1, 8), F(1, 2), OPEN_MARKER, F(1, 16)]
+    assert r.rhythm == [F(1, 4), F(1, 8), F(1, 2), OpenMarker(), F(1, 16)]
     assert ev(r) == [('c4', F(1, 4)), ('d4', F(1, 8)), ('e4', F(1, 2)),
                      ('f4', F(1, 16)), ('g4', F(1, 16))]
 
@@ -313,7 +317,7 @@ def test_concat_both_default_loop_b_restarts_its_own_pattern():
     a = pit('c d') @ rhy('4 8')
     b = pit('e f g') @ rhy('2 16')
     r = a + b
-    assert r.rhythm == [F(1, 4), F(1, 8), OPEN_MARKER, F(1, 2), F(1, 16)]
+    assert r.rhythm == [F(1, 4), F(1, 8), OpenMarker(), F(1, 2), F(1, 16)]
     assert durations(r) == [F(1, 4), F(1, 8), F(1, 2), F(1, 16), F(1, 2)]
 
 
@@ -345,7 +349,7 @@ def test_concat_keeps_trailing_rests_of_a():
 
 def test_concat_rhythm_only():
     r = rhy('4 8') + rhy('2')
-    assert r.rhythm == [F(1, 4), F(1, 8), OPEN_MARKER, F(1, 2)]
+    assert r.rhythm == [F(1, 4), F(1, 8), OpenMarker(), F(1, 2)]
     assert r.content is None
     # a rhythm that plays only rests carries no notes, so it concatenates
     # with notes as silence
@@ -738,6 +742,11 @@ EXAMPLES = [
     rhy('[4 8'),
     rhy('4. 2.. 1 12 2+8 7 r7 64 r8.'),
     rhy('[3: 8 8 8]'),
+    rhy('[7 8: 16*7]'),
+    rhy('[3: 8 8'),
+    rhy('[3: 4 [3: 8 8 8] 4]'),
+    rhy('[3: 8 [3: 8 8'),
+    deg('1 2 3 4 5') @ rhy('[3: 8 8 8'),
     pit('c d e') @ rhy('4 r4 [8'),
     deg('1 2') @ rhy('8'),
     rhy('8') @ deg('1 2 3') @ deg('0 1 2 3'),
@@ -794,3 +803,52 @@ def test_repr_long_ideas_are_cut_short_and_say_so():
     # a cut-short repr is for reading: it is not valid input
     with pytest.raises(SyntaxError):
         eval(text, SCOPE)
+
+
+# ----------------------------------------------------------- tuplet brackets
+
+def test_tuplet_markers_survive_the_operators():
+    i = deg('1 2 3') @ rhy('[3: 8 8 8')
+    assert i.rhythm == [OpenMarker(3, 2), F(1, 8), F(1, 8), F(1, 8)]
+    assert durations(i) == [F(1, 12)] * 3          # written eighths, in 3:2 time
+    # a slice closes the tuplet it cuts through
+    cut = i[0:2]
+    assert cut.rhythm == [OpenMarker(3, 2), F(1, 8), F(1, 8), CloseMarker()]
+    assert durations(cut) == [F(1, 12), F(1, 12)]
+    # a repeat unrolls one pass and closes the tuplet it filled
+    twice = i * 2
+    assert twice.rhythm == i.rhythm + [CloseMarker()]
+    assert durations(twice) == [F(1, 12)] * 6
+    # a sequence keeps b's own rhythm after a's unrolled one
+    joined = i + (deg('4') @ rhy('4'))
+    assert format_rhythm(joined.rhythm) == '[3: 8 8 8] [4'
+    # retrograding keeps it a tuplet
+    assert format_rhythm(i.retro().rhythm) == '[3: 8 8 8]'
+
+
+def test_render_writes_tuplet_brackets(capture):
+    idea = deg('1 2 3 4 5 6') @ rhy('[3: 8 8 8] 4 4 4')
+    Score([Part(idea, 'X')], '4/4').show()
+    xml = capture[-1]
+    assert xml.count('<tuplet type="start"') == 1
+    assert xml.count('<tuplet type="stop"') == 1
+    assert ('<time-modification><actual-notes>3</actual-notes>'
+            '<normal-notes>2</normal-notes>') in xml
+    assert xml.count('<type>eighth</type>') == 3   # written type, not 1/12ths
+
+    verovio = pytest.importorskip('verovio')
+    toolkit = verovio.toolkit()
+    assert toolkit.loadData(xml)
+    mei = toolkit.getMEI()
+    assert 'num="3"' in mei and 'numbase="2"' in mei
+
+
+def test_render_numbers_nested_tuplets_and_closes_the_innermost(capture):
+    idea = deg('1 2 3 4 5 6 7 8 9') @ rhy('[3: 8 8 8 [7 8: 16*7] 4')
+    Score([Part(idea, 'X')], '4/4').show()
+    xml = capture[-1]
+    assert xml.count('<tuplet type="start"') == xml.count('<tuplet type="stop"') == 2
+    assert 'number="1"' in xml and 'number="2"' in xml   # outer gets 1, inner 2
+    assert '<actual-notes>7</actual-notes>' in xml       # '[k j:' ratio reaches MusicXML
+    verovio = pytest.importorskip('verovio')
+    assert verovio.toolkit().loadData(xml)

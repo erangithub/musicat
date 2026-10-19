@@ -83,10 +83,15 @@ def _beams(measure, beat_ticks, group_ticks):
 def show_score(score: Score):
     parts_events = []
     for part in score.parts:
-        parts_events.append(part.idea.events())
-    units = lcm(4, score.beat_type,
-                *[duration.denominator for events in parts_events
-                  for _, duration in events])
+        parts_events.append(part.idea._realize())
+    actuals = []
+    for events in parts_events:
+        for _, _, nominal, tuplets in events:
+            factor = Fraction(1)
+            for k, j in (tuplets or ()):
+                factor *= Fraction(j, k)
+            actuals.append(nominal * factor)
+    units = lcm(4, score.beat_type, *[d.denominator for d in actuals])
     divisions = units // 4
     bar_ticks = int(Fraction(score.beats, score.beat_type) * units)
     beat_ticks = units // score.beat_type
@@ -100,18 +105,41 @@ def show_score(score: Score):
         notes = []
         filled = 0
         shown = set()                      # (letter, octave) altered earlier in this bar
-        for group, duration in events:
+        previous = ()                      # the tuplets of the event before this one
+        for index, (_, group, nominal, tuplets) in enumerate(events):
+            tuplets = tuplets or ()
+            following = ((events[index + 1][3] or ())
+                         if index + 1 < len(events) else ())
+            opened = 0
+            while (opened < len(previous) and opened < len(tuplets)
+                   and previous[opened] == tuplets[opened]):
+                opened += 1
+            closed = 0
+            while (closed < len(tuplets) and closed < len(following)
+                   and tuplets[closed] == following[closed]):
+                closed += 1
+            begin = [f'<tuplet type="start" number="{d + 1}"/>'
+                     for d in range(opened, len(tuplets))]
+            end = [f'<tuplet type="stop" number="{d + 1}"/>'
+                   for d in range(closed, len(tuplets))]
+            previous = tuplets
+            factor = Fraction(1)
+            for k, j in tuplets:
+                factor *= Fraction(j, k)
+            tuplet_xml = ''
+            if tuplets:
+                k, j = tuplets[-1]
+                tuplet_xml = (f'<time-modification><actual-notes>{k}</actual-notes>'
+                              f'<normal-notes>{j}</normal-notes></time-modification>')
             # a note that would cross a barline is split at the bar and tied
             # to its continuation, so every bar fills exactly
-            remaining = int(duration * units)
+            remaining = int(nominal * factor * units)
             carried = False                     # a tie arriving from the last bar
+            first = True
             while remaining > 0:
                 ticks = min(remaining, bar_ticks - filled)
-                name, dots, actual, normal = _duration_type(Fraction(ticks, units))
+                name, dots, _, _ = _duration_type(Fraction(ticks, units) / factor)
                 dots_xml = '<dot/>' * dots
-                tuplet_xml = (f'<time-modification><actual-notes>{actual}</actual-notes>'
-                              f'<normal-notes>{normal}</normal-notes></time-modification>'
-                              if actual else '')
                 start = ticks < remaining
                 if group:
                     tie_xml = ('<tie type="stop"/>' if carried else '') \
@@ -120,6 +148,13 @@ def show_score(score: Score):
                             'stop' if carried else 'start' if start else None)
                 else:
                     tie_xml, tied = '', None
+                notations = []
+                if tied:
+                    notations.append(f'<tied type="{tied}"/>')
+                if first:
+                    notations.extend(begin)
+                if not start:
+                    notations.extend(end)
                 if not group:
                     body = (f'<note><rest/><duration>{ticks}</duration>{tie_xml}'
                             f'<voice>1</voice>'
@@ -145,19 +180,20 @@ def show_score(score: Score):
                             f'<octave>{octave}</octave></pitch>'
                             f'<duration>{ticks}</duration>{tie_xml}<voice>1</voice>'
                             f'<type>{name}</type>{dots_xml}{acc}{tuplet_xml}</note>')
-                notes.append((body, ticks, None if not group else name, tied))
+                notes.append((body, ticks, None if not group else name, notations))
                 filled += ticks
                 remaining -= ticks
                 carried = start
+                first = False
                 if filled >= bar_ticks:
                     beams = _beams([(t, kind) for _, t, kind, _ in notes],
                                    beat_ticks, group_ticks)
                     measures.append(''.join(
                         (note.replace('</note>', beam + '</note>', 1) if beam else note)
                         .replace('</note>',
-                                 (f'<notations><tied type="{k}"/></notations>' if k else '')
-                                 + '</note>')
-                        for (note, _, _, k), beam in zip(notes, beams)))
+                                 (f'<notations>{"".join(n)}</notations>' if n else '')
+                                 + '</note>', 1)
+                        for (note, _, _, n), beam in zip(notes, beams)))
                     notes = []
                     filled = 0
                     shown = set()               # a new bar starts fresh
@@ -166,9 +202,9 @@ def show_score(score: Score):
             measures.append(''.join(
                 (note.replace('</note>', beam + '</note>', 1) if beam else note)
                 .replace('</note>',
-                         (f'<notations><tied type="{k}"/></notations>' if k else '')
-                         + '</note>')
-                for (note, _, _, k), beam in zip(notes, beams)))
+                         (f'<notations>{"".join(n)}</notations>' if n else '')
+                         + '</note>', 1)
+                for (note, _, _, n), beam in zip(notes, beams)))
 
         attributes = (f'<attributes><divisions>{divisions}</divisions>'
                       '<key><fifths>0</fifths></key>'

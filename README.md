@@ -143,12 +143,15 @@ Durations are whole-note relative `Fraction`s (`1` is a whole, `4` a quarter). A
 of a whole, dots lengthen it (`4.`, `4..`), `r` prefixes a rest (`r4`), and a `+`-joined chain is one
 longer event (`4+8` is a dotted quarter). A trailing `*n` repeats a token (`8*3`), and `[ ... ]` groups
 nest and may be repeated; `[k: ...]` is a tuplet, the notes sitting in the time of the largest power of
-two below `k` (`[3: 8 8 8]`), and `[k j: ...]` overrides that ratio (`[7 8: 16*7]`). A rhythm loops over
+two below `k` (`[3: 8 8 8]`), and `[k j: ...]` overrides that ratio (`[7 8: 16*7]`). A tuplet keeps the
+ratio as a bracket around its written notes, so `rhy('[3: 8 8 8]')` is three `8`s under a `3:2` marker
+and renders as a triplet bracket, not as three flattened `12`s. A rhythm loops over
 the content. An unclosed `[` marks where
 the repeating part starts (`'4 [8'` is a quarter then eighths forever); without one the whole rhythm
-repeats. On its own a cycling rhythm is infinite, so it needs content or a bounded slice.
-`_realize`/`events()` unroll an idea into `(pitch group, duration)` pairs, which is what rendering
-consumes:
+repeats, and when unclosed brackets nest it is the innermost one that loops. On its own a cycling
+rhythm is infinite, so it needs content or a bounded slice.
+`_realize`/`events()` unroll an idea into `(pitch group, duration)` pairs — `events()` already scaled
+by the tuplets — which is what rendering consumes:
 
 ```python
 (deg('1 2 3') @ rhy('4 8')).events()   # [(c4, 1/4), (d4, 1/8), (e4, 1/4)]
@@ -169,11 +172,13 @@ score.show()        # or melody.show() for a single line
 
 `show(musicxml)` renders raw MusicXML through Verovio and displays it inline (defaults to
 `mock/probe.musicxml`); `show_score(score)` renders a whole score. Durations map to MusicXML note
-types, dots and tuplet ratios, and `divisions` is derived from the least common multiple of the
-denominators so every duration lands on a whole tick. Beaming follows the meter, rests and lone
-notes break runs, and beams never cross a barline. A note that would cross a barline is split at the
-bar and tied. Accidentals are written where they change the sound: a sharp or flat when it alters a
-pitch, and a natural when a note cancels an accidental already written earlier in the same bar.
+types, dots and tuplet ratios — a tuplet emits `<time-modification>` plus a `<tuplet>` start/stop so
+the bracket is drawn, numbered by nesting depth — and `divisions` is derived from the least common
+multiple of the denominators so every duration lands on a whole tick. Beaming follows the meter,
+rests and lone notes break runs, and beams never cross a barline. A note that would cross a barline
+is split at the bar and tied. Accidentals are written where they change the sound: a sharp or flat
+when it alters a pitch, and a natural when a note cancels an accidental already written earlier in
+the same bar.
 
 ## Current API
 

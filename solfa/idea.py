@@ -1,9 +1,11 @@
+from fractions import Fraction
+
 from .errors import SyntaxError
 from .pitches import parse_pitches
 from .degrees import (parse_degrees, format_degrees, _parse_degree, white_keys,
                       Degrees)
-from .rhythm import (parse_rhythm, format_rhythm, rhythm_steps,
-                     rhythm_from_steps, WHOLE)
+from .rhythm import (parse_rhythm, format_rhythm, OpenMarker, CloseMarker,
+                     RestMarker, WHOLE)
 
 
 # how much of an idea its repr shows before truncating with '…'
@@ -13,6 +15,33 @@ _REPR_RHYTHM_TOKENS = 16
 
 def _is_count(value):
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _rhythm_from_events(events, loop=None):
+    """Rebuild a rhythm from realized events.
+
+    Each event is (is_rest, group, nominal, tuplets); the group is not used.
+    The written (relative) durations come back as they were, wrapped in the
+    tuplet markers they sit in. `loop`, an index into `events`, marks where the
+    cycling tail begins and gets a bare open marker.
+    """
+    rhythm = []
+    open_tuplets = ()
+    for index, (is_rest, _, nominal, tuplets) in enumerate(events):
+        if index == loop:
+            rhythm.append(OpenMarker())
+        tuplets = tuplets or ()
+        common = 0
+        while (common < len(open_tuplets) and common < len(tuplets)
+               and open_tuplets[common] == tuplets[common]):
+            common += 1
+        rhythm.extend([CloseMarker()] * (len(open_tuplets) - common))
+        rhythm.extend([OpenMarker(k, j) for k, j in tuplets[common:]])
+        open_tuplets = tuplets
+        rhythm.append(RestMarker(nominal) if is_rest else nominal)
+    rhythm.extend([CloseMarker()] * len(open_tuplets))
+    return rhythm
+
 
 
 class Idea:
@@ -107,8 +136,7 @@ class Idea:
             if not other.content:
                 rhythm = other.rhythm
             else:
-                one_pass = [(rest, duration) for rest, _, duration in other._realize()]
-                rhythm = rhythm_from_steps(one_pass)
+                rhythm = _rhythm_from_events(other._realize())
         else:
             rhythm = self.rhythm
         return Idea(content, rhythm)
@@ -132,8 +160,7 @@ class Idea:
         content = Degrees(self.content.groups * count)
         if self.rhythm is None:
             return Idea(content)
-        one_pass = [(rest, duration) for rest, _, duration in self._realize()]
-        return Idea(content, rhythm_from_steps(one_pass))
+        return Idea(content, _rhythm_from_events(self._realize()))
 
     def trans(self, interval, up=True):
         """Move every note by a musical interval, measured through the white keys.
@@ -184,7 +211,19 @@ class Idea:
             # concatenates as silence; one with sounding steps is ambiguous
             # with composing onto notes (use @ for that)
             silent = other if self.content is not None else self
-            if any(not rest for rest, _ in rhythm_steps(silent.rhythm)[0]):
+            steps = []
+            stack = []
+            for item in silent.rhythm or []:
+                if isinstance(item, OpenMarker):
+                    stack.append(item)
+                elif isinstance(item, CloseMarker):
+                    if stack:
+                        stack.pop()
+                elif isinstance(item, RestMarker):
+                    steps.append(True)
+                else:
+                    steps.append(False)
+            if any(not rest for rest in steps):
                 raise SyntaxError('Cannot concatenate an idea that has notes with a '
                                   'rhythm-only idea; use @ to compose a rhythm onto notes')
             if self.content is None:
@@ -201,21 +240,65 @@ class Idea:
         if other.rhythm is None:
             if (self.rhythm and other.content and self.content is not None
                     and not self.content):
-                steps, _ = rhythm_steps(self.rhythm)
-                if all(rest for rest, _ in steps):
+                steps = []
+                stack = []
+                for item in self.rhythm:
+                    if isinstance(item, OpenMarker):
+                        stack.append(item)
+                    elif isinstance(item, CloseMarker):
+                        if stack:
+                            stack.pop()
+                    elif isinstance(item, RestMarker):
+                        steps.append((True, item.duration,
+                                      tuple((m.k, m.j) for m in stack
+                                            if m.k is not None)))
+                    else:
+                        steps.append((False, item,
+                                      tuple((m.k, m.j) for m in stack
+                                            if m.k is not None)))
+                if all(rest for rest, _, _ in steps):
                     # pure silence has no slots to continue over: the rests
                     # sound once and other's notes take the pulse it sets
-                    return rhythm_from_steps(
-                        steps + [(False, steps[0][1])] * len(other.content))
+                    pulse = steps[0]
+                    rhythm = list(self.rhythm)
+                    for _ in range(len(other.content)):
+                        rhythm.extend([OpenMarker(k, j) for k, j in pulse[2]])
+                        rhythm.append(pulse[1])
+                        rhythm.extend([CloseMarker()] * len(pulse[2]))
+                    return rhythm
             return self.rhythm                      # continues over the joined notes
-        b_steps, b_loop = rhythm_steps(other.rhythm)
-        if b_loop is None:
-            b_loop = 0
+        rhythm = _rhythm_from_events(self._realize() if self.rhythm else [])
         if self.rhythm is None:
-            a_steps = [(False, b_steps[0][1])] * len(self.content)
-        else:
-            a_steps = [(rest, duration) for rest, _, duration in self._realize()]
-        return rhythm_from_steps(a_steps + b_steps, len(a_steps) + b_loop)
+            stack = []
+            first = (False, WHOLE, ())
+            for item in other.rhythm:
+                if isinstance(item, OpenMarker):
+                    stack.append(item)
+                elif isinstance(item, CloseMarker):
+                    if stack:
+                        stack.pop()
+                else:
+                    rest = isinstance(item, RestMarker)
+                    first = (rest, item.duration if rest else item,
+                             tuple((m.k, m.j) for m in stack
+                                   if m.k is not None))
+                    break
+            for _ in range(len(self.content)):
+                rhythm.extend([OpenMarker(k, j) for k, j in first[2]])
+                rhythm.append(first[1])
+                rhythm.extend([CloseMarker()] * len(first[2]))
+        # other's own rhythm follows, open group and all; when it has none we
+        # still mark where it repeats
+        depth = 0
+        for item in other.rhythm:
+            if isinstance(item, OpenMarker):
+                depth += 1
+            elif isinstance(item, CloseMarker):
+                depth -= 1
+        if depth == 0:
+            rhythm.append(OpenMarker())
+        rhythm.extend(other.rhythm)
+        return rhythm
 
     # ----------------------------------------------------------- mapping
 
@@ -300,25 +383,22 @@ class Idea:
         result is one pass, with no open group.
         """
         play = self._realize()
-        steps = [(rest, duration) for rest, _, duration in play]
-        notes = [group for _, group, _ in play if group is not None]
-        if retrograde_rhythm:
-            steps = steps[::-1]
+        events = play[::-1] if retrograde_rhythm else play
+        notes = [group for _, group, _, _ in play if group is not None]
         if retrograde_degrees:
             notes = notes[::-1]
         result = []
         k = 0
-        for rest, duration in steps:
+        for rest, group, nominal, tuplets in events:
             if self.content is None or rest:
-                result.append((rest, None, duration))
+                result.append((rest, None, nominal, tuplets))
             else:
-                result.append((False, notes[k], duration))
+                result.append((False, notes[k], nominal, tuplets))
                 k += 1
         content = Degrees(notes) if self.content is not None else None
         if self.rhythm is None:
             return Idea(content)
-        return Idea(content, rhythm_from_steps(
-            [(rest, duration) for rest, _, duration in result]))
+        return Idea(content, _rhythm_from_events(result))
 
 
     # ------------------------------------------------------------- display
@@ -343,50 +423,68 @@ class Idea:
         if not isinstance(key, (int, slice)):
             raise TypeError(f'Idea indices must be integers or slices, not {type(key).__name__}')
         if not self.content and self.rhythm:
-            steps, loop_start = rhythm_steps(self.rhythm)
-            if loop_start is not None:
-                prefix, tail = steps[:loop_start], steps[loop_start:]
+            steps = []
+            stack = []
+            for item in self.rhythm:
+                if isinstance(item, OpenMarker):
+                    stack.append([item, len(steps)])
+                elif isinstance(item, CloseMarker):
+                    if stack:
+                        stack.pop()
+                else:
+                    rest = isinstance(item, RestMarker)
+                    nominal = item.duration if rest else item
+                    steps.append((rest, None, nominal,
+                                  tuple((m[0].k, m[0].j) for m in stack
+                                        if m[0].k is not None)))
+            loop = stack[-1][1] if stack else None
+            if loop is not None:
+                prefix, tail = steps[:loop], steps[loop:]
                 if isinstance(key, int):
                     if key < 0:
                         raise SyntaxError('Cannot read an infinite rhythm from the end')
-                    step = prefix[key] if key < loop_start else tail[(key - loop_start) % len(tail)]
-                    return Idea(rhythm=rhythm_from_steps([step]))
-                start = 0 if key.start is None else key.start
-                stop = key.stop
-                step = 1 if key.step is None else key.step
-                if start < 0 or step < 1 or (stop is not None and stop < 0):
-                    raise SyntaxError('Cannot read an infinite rhythm from the end')
-                if stop is not None:
-                    chosen = []
-                    i = start
-                    while i < stop:
-                        chosen.append(prefix[i] if i < loop_start
-                                      else tail[(i - loop_start) % len(tail)])
-                        i += step
-                    if not chosen:
-                        return Idea()
-                    return Idea(rhythm=rhythm_from_steps(chosen))
-                if step != 1:
-                    raise SyntaxError('Cannot read an infinite rhythm with a step and no stop')
-                if start < loop_start:
-                    new_steps = prefix[start:] + tail
-                    return Idea(rhythm=rhythm_from_steps(new_steps, loop_start - start))
-                offset = (start - loop_start) % len(tail)
-                return Idea(rhythm=rhythm_from_steps(tail[offset:] + tail[:offset], 0))
+                    chosen = [prefix[key] if key < loop
+                              else tail[(key - loop) % len(tail)]]
+                    loop_at = None
+                else:
+                    start = 0 if key.start is None else key.start
+                    stop = key.stop
+                    step = 1 if key.step is None else key.step
+                    if start < 0 or step < 1 or (stop is not None and stop < 0):
+                        raise SyntaxError('Cannot read an infinite rhythm from the end')
+                    if stop is not None:
+                        chosen = []
+                        i = start
+                        while i < stop:
+                            chosen.append(prefix[i] if i < loop
+                                          else tail[(i - loop) % len(tail)])
+                            i += step
+                        loop_at = None
+                    elif step != 1:
+                        raise SyntaxError('Cannot read an infinite rhythm with a step and no stop')
+                    elif start < loop:
+                        chosen = prefix[start:] + tail
+                        loop_at = loop - start
+                    else:
+                        offset = (start - loop) % len(tail)
+                        chosen = tail[offset:] + tail[:offset]
+                        loop_at = 0
+                if not chosen:
+                    return Idea()
+                return Idea(rhythm=_rhythm_from_events(chosen, loop_at))
         play = [] if not self.content and not self.rhythm else self._realize()
         picked = play[key]
         if isinstance(key, int):
             picked = [picked]
         if not picked:
             return Idea()
-        groups = [group for _, group, _ in picked if group is not None]
+        groups = [group for _, group, _, _ in picked if group is not None]
         # a content idea stays a content idea even when the slice lands only on
         # rests, so its pieces still join with + (empty Degrees, not None)
         content = Degrees(groups) if self.content is not None or groups else None
         if self.rhythm is None:
             return Idea(content)
-        return Idea(content, rhythm_from_steps([(rest, duration)
-                                                for rest, _, duration in picked]))
+        return Idea(content, _rhythm_from_events(picked))
 
     def show(self, time='4/4'):
         from . import Part
@@ -400,49 +498,73 @@ class Idea:
     def _realize(self):
         """Unroll the rhythm over the content, once.
 
-        Returns [(is_rest, group, duration)], where group is None for rests and
-        for the steps of a rhythm-only idea. Every note of the content is used
-        exactly once. Rests written after the last note, in the same pass of the
-        rhythm, are kept ('4 4 r2' over two notes ends with the half rest); a
-        rest that only begins the next pass of the loop is not. A rhythm-only
-        idea left cycling has no last event to stop at: it is infinite.
+        Returns [(is_rest, group, nominal, tuplets)], where group is None for
+        rests and for the steps of a rhythm-only idea, and tuplets lists the
+        enclosing (k, j) ratios outermost first. Durations are the written
+        (relative) values; `events()` scales them by the tuplets into actual
+        time. Every note of the content is used exactly once. Rests written
+        after the last note, in the same pass of the rhythm, are kept
+        ('4 4 r2' over two notes ends with the half rest); a rest that only
+        begins the next pass of the loop is not. A rhythm-only idea left
+        cycling has no last event to stop at: it is infinite.
         """
         if self.rhythm:
-            steps, loop_start = rhythm_steps(self.rhythm)
+            steps = []
+            stack = []
+            for item in self.rhythm:
+                if isinstance(item, OpenMarker):
+                    stack.append([item, len(steps)])
+                elif isinstance(item, CloseMarker):
+                    if stack:
+                        stack.pop()
+                else:
+                    rest = isinstance(item, RestMarker)
+                    nominal = item.duration if rest else item
+                    steps.append((rest, nominal,
+                                  tuple((m[0].k, m[0].j) for m in stack
+                                        if m[0].k is not None)))
+            loop = stack[-1][1] if stack else None
         else:
-            steps, loop_start = [(False, WHOLE)], None
+            steps = [(False, WHOLE, ())]
+            loop = None
         groups = self.content.groups if self.content is not None else None
         if not groups:
-            if loop_start is not None:
+            if loop is not None:
                 raise SyntaxError('infinite rhythm; pair it with degrees or slice it')
-            return [(rest, None, duration) for rest, duration in steps]
-        sounding = sum(1 for rest, _ in steps if not rest)
-        start = 0 if loop_start is None else loop_start
-        if len(groups) > sounding and all(rest for rest, _ in steps[start:]):
+            return [(rest, None, nominal, tuplets)
+                    for rest, nominal, tuplets in steps]
+        sounding = sum(1 for rest, _, _ in steps if not rest)
+        start = 0 if loop is None else loop
+        if len(groups) > sounding and all(rest for rest, _, _ in steps[start:]):
             raise SyntaxError('The looping part of the rhythm has no sounding '
                               'notes to put the content on')
         result = []
         used = 0
         k = 0
         while used < len(groups):
-            rest, duration = steps[k]
+            rest, nominal, tuplets = steps[k]
             if rest:
-                result.append((True, None, duration))
+                result.append((True, None, nominal, tuplets))
             else:
-                result.append((False, groups[used], duration))
+                result.append((False, groups[used], nominal, tuplets))
                 used += 1
             k += 1
             if k == len(steps) and used < len(groups):
                 k = start
         while k < len(steps) and steps[k][0]:
-            result.append((True, None, steps[k][1]))
+            result.append((True, None, steps[k][1], steps[k][2]))
             k += 1
         return result
 
     def events(self):
         """[(group, duration)] ready for rendering; a rest has an empty group."""
-        return [([] if group is None else group, duration)
-                for _, group, duration in self._realize()]
+        out = []
+        for _, group, nominal, tuplets in self._realize():
+            actual = nominal
+            for k, j in (tuplets or ()):
+                actual = actual * Fraction(j, k)
+            out.append(([] if group is None else group, actual))
+        return out
 
 
 def pit(text):
