@@ -311,7 +311,10 @@ class Degrees:
             for number, own in group:
                 letter = number + move
                 value = white_keys._at((number, 0))[0] + (own or 0) + sound
-                notes.append((letter, value - white_keys._at((letter, 0))[0]))
+                delta_acc = value - white_keys._at((letter, 0))[0]
+                if delta_acc == 0 and acc is None and own is None:
+                    delta_acc = None
+                notes.append((letter, delta_acc))
             groups.append(notes)
         return Degrees(groups)
 
