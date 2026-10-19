@@ -91,13 +91,15 @@ def show_score(score: Score):
     bar_ticks = int(Fraction(score.beats, score.beat_type) * units)
     beat_ticks = units // score.beat_type
     group_ticks = beat_ticks * (3 if score.beats % 3 == 0 and score.beat_type >= 8 else 1)
-    acc_map = {'': '', 'bb': 'flat-flat', 'b': 'flat', '#': 'sharp', '##': 'double-sharp'}
+    acc_map = {'': '', 'bb': 'flat-flat', 'b': 'flat', '#': 'sharp', '##': 'double-sharp',
+               'n': 'natural'}
 
     parts = []
     for part, events in zip(score.parts, parts_events):
         measures = []
         notes = []
         filled = 0
+        shown = set()                      # (letter, octave) altered earlier in this bar
         for group, duration in events:
             # a note that would cross a barline is split at the bar and tied
             # to its continuation, so every bar fills exactly
@@ -126,13 +128,21 @@ def show_score(score: Score):
                     body = ''
                     for i, (number, alter) in enumerate(group):
                         alter = alter or 0
+                        letter = LETTERS[(number - 1) % 7].upper()
+                        octave = (number - 1) // 7 + ORIGIN // 7
+                        slot = (letter, octave)
                         run = '#' * alter if alter > 0 else 'b' * -alter
+                        if alter:
+                            shown.add(slot)
+                        elif slot in shown:
+                            shown.discard(slot)    # this natural cancels an earlier accidental
+                            run = 'n'
                         symbol = acc_map[run]
                         acc = f'<accidental>{symbol}</accidental>' if symbol else ''
                         alt = f'<alter>{alter}</alter>' if alter else ''
                         body += ('<note><chord/>' if i else '<note>') + (
-                            f'<pitch><step>{LETTERS[(number - 1) % 7].upper()}</step>{alt}'
-                            f'<octave>{(number - 1) // 7 + ORIGIN // 7}</octave></pitch>'
+                            f'<pitch><step>{letter}</step>{alt}'
+                            f'<octave>{octave}</octave></pitch>'
                             f'<duration>{ticks}</duration>{tie_xml}<voice>1</voice>'
                             f'<type>{name}</type>{dots_xml}{acc}{tuplet_xml}</note>')
                 notes.append((body, ticks, None if not group else name, tied))
@@ -150,6 +160,7 @@ def show_score(score: Score):
                         for (note, _, _, k), beam in zip(notes, beams)))
                     notes = []
                     filled = 0
+                    shown = set()               # a new bar starts fresh
         if notes:
             beams = _beams([(t, kind) for _, t, kind, _ in notes], beat_ticks, group_ticks)
             measures.append(''.join(
