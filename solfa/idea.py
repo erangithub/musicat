@@ -234,11 +234,11 @@ class Idea:
     def inv(self, low, high):
         """Chromatically mirror every degree around `low`..`high`; rhythm kept.
 
-        The number line mirrors as in `diainv`, but accidentals are corrected
-        by the white-key semitone discrepancy so the *sound* mirrors exactly:
-        over the axis C..G, E ('3') becomes Eb ('3b') and over C..C it
-        becomes Ab ('6b'). Accepts degrees as text or (number, accidental)
-        tuples, like `trans`.
+        The sound mirrors exactly: over the axis C..G, E ('3') becomes Eb
+        ('3b') and over C..C it becomes Ab ('6b'). The mirror resolves to the
+        keyboard, so a bare degree or axis point is read as natural and the
+        result is written out in full, with final accidentals.
+        Accepts degrees as text or (number, accidental) tuples, like `trans`.
         """
         if self.content is None:
             raise SyntaxError('A rhythm-only idea has nothing to invert')
@@ -251,11 +251,11 @@ class Idea:
             else:
                 raise SyntaxError(f'Illegal axis {value!r}')
         (low_step, low_acc), (high_step, high_acc) = axis
-        base = (low_acc + high_acc
+        base = ((low_acc or 0) + (high_acc or 0)
                 + white_keys._at((low_step, 0))[0]
                 + white_keys._at((high_step, 0))[0])
         groups = [[(low_step + high_step - number,
-                    base - acc - white_keys._at((number, 0))[0]
+                    base - (acc or 0) - white_keys._at((number, 0))[0]
                     - white_keys._at((low_step + high_step - number, 0))[0])
                    for number, acc in group]
                   for group in self.content.groups]
@@ -265,10 +265,11 @@ class Idea:
         """Diatonically mirror every degree around `low`..`high`; rhythm kept.
 
         Each degree's distance from `low` becomes the same distance from
-        `high`, so `diainv('1', '5')` turns '1 2 3 4 5' into '5 4 3 2 1' and
-        '3#' into '3b'. The mirror keeps letters, so E over the axis C..G
-        stays E. Accepts degrees as text or (number, accidental) tuples,
-        like `trans`.
+        `high`, so `diainv('1', '5')` turns '1 2 3 4 5' into '5 4 3 2 1'.
+        The mirror keeps letters: a bare degree stays bare, and a final
+        accidental mirrors its distance from the axis (a sharp becomes a
+        flat), the axis points counting as natural. Accepts degrees as text
+        or (number, accidental) tuples, like `trans`.
         """
         if self.content is None:
             raise SyntaxError('A rhythm-only idea has nothing to invert')
@@ -281,7 +282,9 @@ class Idea:
             else:
                 raise SyntaxError(f'Illegal axis {value!r}')
         (low_step, low_acc), (high_step, high_acc) = axis
-        groups = [[(low_step + high_step - number, low_acc + high_acc - acc)
+        groups = [[(low_step + high_step - number,
+                    None if acc is None
+                    else (low_acc or 0) + (high_acc or 0) - acc)
                    for number, acc in group]
                   for group in self.content.groups]
         return Idea(Degrees(groups), self.rhythm)

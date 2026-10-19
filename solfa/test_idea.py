@@ -82,7 +82,7 @@ def test_slots_and_compat_properties():
     assert i.content.groups == [[(1, 0)], [(2, 0)]] and i.rhythm == [F(1, 4)]
     d = deg('1 2')
     assert isinstance(d.content, Degrees)
-    assert d.content.groups == [[(1, 0)], [(2, 0)]]
+    assert d.content.groups == [[(1, None)], [(2, None)]]
     assert rhy('4').content is None
     # indexing reads the realized events — notes and rests in play order — and
     # a slice carries the durations it actually plays
@@ -119,7 +119,10 @@ def test_cannot_hold_both_by_construction():
 def test_equality_and_repr():
     assert deg('1 2') == deg('1 2')
     assert deg('1 2') != deg('1 3')
-    assert deg('1') == pit('c')                    # degree 1 is c4
+    assert deg('1n') == pit('c')                   # a final natural is c4 ...
+    assert deg('1') != deg('1n')                   # ... while bare waits for the palette
+    assert deg('4n').content.groups == [[(4, 0)]]      # 'n' is a final natural
+    assert deg('4# 4bb').content.groups == [[(4, 1)], [(4, -2)]]
     assert deg('1..5') == deg('1 2 3 4 5')         # a range is its steps
     assert deg('2,,8') == deg('2 4 6 8')           # a stepped range is its steps
     assert len(deg('1 2 3')) == 3 and len(Idea()) == 0
@@ -134,7 +137,7 @@ def test_layering_is_symmetric_and_order_free():
     for build in (lambda: rhy('8') @ deg('1 2'),
                   lambda: deg('1 2') @ rhy('8')):
         i = build()
-        assert i.content.groups == [[(1, 0)], [(2, 0)]] and i.rhythm == [F(1, 8)]
+        assert i.content.groups == [[(1, None)], [(2, None)]] and i.rhythm == [F(1, 8)]
     i = pit('c d') @ rhy('8')
     assert i.content is not None and i.rhythm == [F(1, 8)]
 
@@ -142,9 +145,14 @@ def test_layering_is_symmetric_and_order_free():
 def test_stacking_keeps_whichever_rhythm_exists():
     r = (deg('1 2') @ rhy('4')) @ deg('1 3')
     assert r.rhythm == [F(1, 4)]                    # the quarter stays raw and loops
-    assert r.content.groups == [[(1, 0)], [(3, 0)], [(2, 0)], [(4, 0)]]
+    assert r.content.groups == [[(1, None)], [(3, None)], [(2, None)], [(4, None)]]
     chain = rhy('4') @ deg('1 2') @ deg('1 3')
     assert chain == r
+    # stacking adds intervals; a bare accidental stays bare, but once an
+    # accidental is written it is final and the sum is final too
+    assert deg('2') @ deg('3') == deg('4')
+    assert deg('2') @ deg('3#') == deg('4#')
+    assert deg('2#') @ deg('3b') == deg('4n')
     # when both sides carry a rhythm, the right-hand one replaces the left
     assert rhy('4') @ rhy('8') == rhy('8')
     retime = (deg('1 2') @ rhy('4 |: 8')) @ rhy('2')
@@ -246,7 +254,7 @@ def test_repeat_resolves_like_anything_else():
 def test_concat_neither_has_rhythm_invents_none():
     r = pit('c d') + pit('e')
     assert r.content.groups == pit('c d e').content.groups and r.rhythm is None
-    assert (deg('1 2') + deg('3')).content.groups == [[(1, 0)], [(2, 0)], [(3, 0)]]
+    assert (deg('1 2') + deg('3')).content.groups == [[(1, None)], [(2, None)], [(3, None)]]
 
 
 def test_concat_both_have_rhythm_keeps_b_loop():
@@ -352,6 +360,9 @@ def test_trans_counts_intervals_on_the_degree_line():
     assert m.trans('1') == m                                      # the unison
     assert names(m.trans('0')) == [['b3'], ['d#4'], ['f#4']]      # a second down
     assert names(m.trans('-1')) == [['a3'], ['c#4'], ['e4']]      # a third down
+    # a bare degree is read as the C major spelling, and the result is final
+    assert deg('1 3').trans('1') == deg('1n 3n')
+    assert deg('2 3').trans('2') == deg('3n 4#')      # the second keeps its sound: E -> F#
 
 
 def test_trans_accepts_a_tuple():
@@ -405,7 +416,7 @@ def test_inv_diainv_and_retro():
     # semitone distance is exact
     assert deg('3').diainv('1', '5') == deg('3')            # diatonic keeps the letter
     assert deg('3').inv('1', '5') == deg('3b')              # E -> Eb
-    assert deg('1 2 3 4 5').inv('1', '5') == deg('5 4 3b 2 1')
+    assert deg('1 2 3 4 5').inv('1', '5') == deg('5n 4n 3b 2n 1n')
     assert deg('3').inv('1', '8') == deg('6b')              # E -> Ab over the octave
     with pytest.raises(SyntaxError, match='nothing to invert'):
         rhy('4').diainv('1', '5')
@@ -510,23 +521,24 @@ def test_rhythm_survives_both_directions():
     there = (deg('1 2') @ r) >> major_scale('c')
     back = there << major_scale('c')
     assert there.rhythm == back.rhythm == r.rhythm
-    assert back.content.groups == [[(1, 0)], [(2, 0)]]
+    assert back.content.groups == [[(1, None)], [(2, None)]]    # exact notes come back bare
 
 
 def test_pitches_to_degrees_chromatic_and_spelling():
     got = pit('c4 db4 c#4 d4') << major_scale('c')
-    assert got.content.groups == [[(1, 0)], [(2, -1)], [(1, 1)], [(2, 0)]]
+    assert got.content.groups == [[(1, None)], [(2, -1)], [(1, 1)], [(2, None)]]
     assert got.content.groups[1] != got.content.groups[2]      # enharmonics stay distinct
 
 
 def test_pitches_to_degrees_chords_and_octaves():
     got = pit('<c4 e g> <c5 e g>') << major_scale('c')
-    assert got.content.groups == [[(1, 0), (3, 0), (5, 0)], [(8, 0), (10, 0), (12, 0)]]
+    assert got.content.groups == [[(1, None), (3, None), (5, None)],
+                                  [(8, None), (10, None), (12, None)]]
 
 
 def test_strict():
     c = major_scale('c')
-    assert (pit('c d e') << c).content.groups == [[(1, 0)], [(2, 0)], [(3, 0)]]
+    assert (pit('c d e') << c).content.groups == [[(1, None)], [(2, None)], [(3, None)]]
     with pytest.raises(SyntaxError, match='not in the palette'):
         pit('c#4').content.unmap(c.content, strict=True)
     with pytest.raises(SyntaxError, match='not in the palette'):
@@ -565,12 +577,21 @@ def test_degree_roundtrip_exact_for_distinct_letters(name):
     for degree in range(-25, 40):
         for acc in (-1, 0, 1):
             idea = Idea(Degrees([[(degree, acc)]]))
-            assert (idea >> p) << p == idea, (name, degree, acc)
+            note = idea >> p
+            back = note << p
+            number, final = back.content.groups[0][0]
+            assert number == degree, (name, degree, acc)      # the letter survives
+            assert final is None or final == acc, (name, degree, acc)
+            assert (back >> p) == note, (name, degree, acc)   # and so does the sound
 
 
 def test_reharmonize_pipeline():
     out = pit('c e g') << major_scale('c') >> pit('d4 f a d5')
     assert names(out) == [['d4'], ['a4'], ['f5']]
+    # a final accidental is final: it overrides the scale, keeping the letter
+    assert (deg('4n') >> major_scale('f')).content.groups == [[(7, 0)]]   # B natural, not Bb
+    assert (deg('3#') >> major_scale('eb')).content.groups == [[(5, 1)]]  # G#, not G
+    assert (deg('3') >> major_scale('eb')).content.groups == [[(5, 0)]]   # bare: the scale's G
 
 
 def test_each_operator_accepts_only_its_own_direction():
@@ -617,22 +638,22 @@ def roundtrips(idea):
 
 
 def test_repr_reads_like_the_expression_that_builds_it():
-    assert repr(pit('c d e')) == "deg('1 2 3')"
+    assert repr(pit('c d e')) == "deg('1n 2n 3n')"    # pitches are final, so they print 'n'
     assert repr(deg('1 2 3')) == "deg('1 2 3')"
     assert repr(rhy('4 r4 |: 8')) == "rhy('4 r4 |: 8')"
-    assert repr(pit('c d') @ rhy('4')) == "deg('1 2') @ rhy('4')"
+    assert repr(pit('c d') @ rhy('4')) == "deg('1n 2n') @ rhy('4')"
     assert repr(deg('<1 3 5> 2#') @ rhy('2')) == "deg('<1 3 5> 2#') @ rhy('2')"
     assert repr(Idea()) == 'Idea()'
 
 
 def test_repr_shows_the_loop_marker_that_plus_inserts():
     r = pit('c d') @ rhy('4 8') + pit('e') @ rhy('2 |: 16')
-    assert repr(r) == "deg('1 2 3') @ rhy('4 8 2 |: 16')"
+    assert repr(r) == "deg('1n 2n 3n') @ rhy('4 8 2 |: 16')"
 
 
 def test_repr_of_a_repeated_idea_stays_compact():
     r = pit('c d') @ rhy('4 8') * 2
-    assert repr(r) == "deg('1 2 1 2') @ rhy('4 8')"
+    assert repr(r) == "deg('1n 2n 1n 2n') @ rhy('4 8')"
 
 
 def test_repr_prefers_dotted_durations():

@@ -111,6 +111,7 @@ def show_score(score: Score):
             else:
                 body = ''
                 for i, (number, alter) in enumerate(group):
+                    alter = alter or 0
                     run = '#' * alter if alter > 0 else 'b' * -alter
                     symbol = acc_map[run]
                     acc = f'<accidental>{symbol}</accidental>' if symbol else ''

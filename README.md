@@ -66,7 +66,9 @@ An idea also transposes. An interval is a degree on the same number line as note
 is the unison, `2` up a second, `0` down a second, `-1` down a third, `-2` down a fourth.
 `trans(interval, up=False)` mirrors it around the
 unison, so `2` becomes down a second. The interval keeps its *sound*, spelled through the
-white keys: a fourth above `f4` is `bb4`, not `b4`. `diatrans(interval)` instead moves by
+white keys: a fourth above `f4` is `bb4`, not `b4`. A bare degree is read as natural — the C
+major spelling, as if resolved to the piano keyboard — and the result is written out in full,
+with final accidentals. `diatrans(interval)` instead moves by
 whole letter-steps, keeping each note's accidental: a fourth above `f4` is `b4`.
 
 ```python
@@ -95,11 +97,17 @@ melody[-2:]      # deg('4 5') @ rhy('8 8')
 There is one content type, `Degrees`: a list of groups, each group one note or a chord of
 `(number, accidental)`. Numbers are relative to the 7-letter base with `c4` (middle C) as `1`, so
 `b4` is `7`, `c5` is `8` and notes below `c4` go negative; the plain letters are the identity palette.
-`pit(text)` parses letter names into degrees, the same way:
+`pit(text)` parses letter names into degrees, the same way. A pitch is absolute, so `pit` always
+writes its accidentals out (`c#` is `1#`, `c` is `1n`).
+
+An accidental is written when it is *final* and left off when it is the palette's to decide.
+A bare number is scale-relative: `'4'` means the scale's fourth, whatever the scale spells it as.
+`'4n'`, `'4#'` and `'4b'` are final: natural, sharp and flat — the `n` is how a natural is said
+out loud, and it matters (`deg('1') != deg('1n')`: the one waits for the palette, the other is c4).
 
 ```python
 deg('1 3 5')            # deg('1 3 5')  = c4 e4 g4
-pit('c4 e4 g4')         # deg('1 3 5')  (the same thing)
+pit('c4 e4 g4')         # deg('1n 3n 5n')  (the same thing, written out)
 format_pitches(pit('c4 e4 g4').content.groups)  # 'c4 e4 g4'  back to letter names
 ```
 
@@ -107,13 +115,17 @@ A palette is just another `Idea`, so `>>` maps degrees through it and `<<` is th
 inverse. Its groups are flattened, and it **closes explicitly**: all but the last note form the
 repeating unit, and the last note is a marker whose interval above the first note is the period — so
 `c d e` repeats as `c d | e f | g a | b c …`. Write palettes with their closing octave (`c4 e g c5`,
-`d4 f a d5`) to repeat by octave. Selection is `>>` too: a pattern of positions picks those notes out
-of a palette, keeps the left side's chords, and flattens the palette's:
+`d4 f a d5`) to repeat by octave. A final accidental is final here too: it keeps the letter but
+overrides what the scale spells, so `>>` and `<<` are inverses with the scale in the middle.
+Selection is `>>` too: a pattern of positions picks those notes out of a palette, keeps the left
+side's chords, and flattens the palette's:
 
 ```python
 deg('1 4 7') >> pit('d4 f a d5')   # d4 d5 d6
 deg('2 3 4 5 6 7 8') >> major_scale('c')   # D Dorian
-pit('c4 db4 c#4 d4') << major_scale('c')   # 1, 2b, 1#, 2  (spelling kept)
+deg('4n') >> major_scale('f')      # b-natural (b4): the accidental overrides the scale's b-flat
+deg('3#') >> major_scale('eb')     # g#4 (the scale's g, sharped)
+pit('c4 db4 c#4 d4') << major_scale('c')   # 1, 2b, 1#, 2  (exact notes come back bare)
 ```
 
 A single-note palette has period zero and just returns that note.
@@ -122,7 +134,7 @@ A single-note palette has period zero and just returns that note.
 octave so the period is one octave:
 
 ```python
-major_scale('f')            # deg('4 5 6 7b 8 9 10 11')  = f4 g4 a4 bb4 c5 d5 e5 f5
+major_scale('f')            # deg('4n 5n 6n 7b 8n 9n 10n 11n')  = f4 g4 a4 bb4 c5 d5 e5 f5
 ```
 
 ## Rhythm and events
@@ -160,8 +172,8 @@ notes break runs, and beams never cross a barline.
 | | |
 |---|---|
 | `Idea(content=None, rhythm=None)` | Content (a `Degrees`) plus a rhythm. Empty is the identity for `+`. |
-| `pit(text)` | Parses `c`, `f#`, `bb3`, `<c e g>` into an `Idea` of degrees (letter input sugar). |
-| `deg(text)` | Parses `1 3 5`, `<1 3 5>`, `1..5`, `2#` into an `Idea` of degrees. |
+| `pit(text)` | Parses `c`, `f#`, `bb3`, `<c e g>` into an `Idea` of degrees (letter input sugar; pitches are absolute, so accidentals come out written). |
+| `deg(text)` | Parses `1 3 5`, `<1 3 5>`, `1..5`, `2#`, `4n` into an `Idea` of degrees; a bare number is scale-relative, `n`/`#`/`b` are final. |
 | `rhy(text)` | Parses `4 8 r4 \|: 16` into a rhythm-only `Idea`. |
 | `idea @ other` | Compose: layer a rhythm onto notes (either way round), stack degrees (left is the outer loop); a rhythm on the right replaces one on the left. |
 | `idea * other` | Repeat by an int (`idea * 3`). |
@@ -169,11 +181,11 @@ notes break runs, and beams never cross a barline.
 | `idea[key]` | One event as a one-event idea, or a shorter idea over a slice of the events (`idea[0:-3]`). |
 | `idea.trans(interval, up=True)` | Move every note by a musical interval (`'4#'`, `'0'`, `'-1'`), keeping its sound; `up=False` mirrors it. |
 | `idea.diatrans(interval, up=True)` | Move every note by whole letter-steps, keeping its accidental. |
-| `idea.inv(low, high)` | Chromatically mirror every degree around the axis — the sound mirrors exactly, accidentals adjusted; the rhythm is kept. |
-| `idea.diainv(low, high)` | Diatonically mirror every degree around the axis — letters kept; the rhythm is kept. |
+| `idea.inv(low, high)` | Chromatically mirror every degree around the axis — the sound mirrors exactly, accidentals adjusted (a bare degree reads as natural); the rhythm is kept. |
+| `idea.diainv(low, high)` | Diatonically mirror every degree around the axis — letters kept, a bare degree stays bare; the rhythm is kept. |
 | `idea.retro(...)` | Play the idea backwards; `retrograde_degrees`/`retrograde_rhythm` pick which layers reverse. |
-| `idea >> palette` | Map/select degrees through a palette (an `Idea`). |
-| `idea << palette` | Recover the degrees of pitches in a palette. |
+| `idea >> palette` | Map/select degrees through a palette (an `Idea`); a final accidental overrides the scale's, keeping the letter. |
+| `idea << palette` | Recover the degrees of pitches in a palette; exact scale notes come back bare, alterations keep their accidental. |
 | `Degrees(groups)` | The one content type: groups of `(number, accidental)`. |
 | `Degrees.map(other)` / `.unmap(other, strict=False)` | The two directions of `>>` / `<<`. |
 | `parse_pitches(text)` / `format_pitches(groups)` | The letter language either way: names to degrees, degrees to names. |

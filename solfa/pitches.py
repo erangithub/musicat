@@ -60,6 +60,7 @@ def format_pitches(groups, limit=None):
     """
     def name(note):
         number, acc = note
+        acc = acc or 0
         return (f'{LETTERS[(number - 1) % 7]}'
                 f'{"#" * acc if acc > 0 else "b" * -acc}{(number - 1) // 7 + ORIGIN // 7}')
     shown = groups if limit is None else groups[:limit]

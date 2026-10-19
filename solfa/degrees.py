@@ -2,16 +2,18 @@ import re
 
 from .errors import SyntaxError
 
-Degree = tuple[int, int]
+Degree = tuple[int, int | None]
 
 
 def _parse_degree(text):
-    degree = re.fullmatch(r'(-?\d+)(b+|#+)?', text)
+    degree = re.fullmatch(r'(-?\d+)(n|b+|#+)?', text)
     if not degree:
         raise SyntaxError(f'Illegal degree "{text}"')
     accidental = degree.group(2)
-    if not accidental:
-        acc = 0
+    if accidental is None:
+        acc = None                       # scale-relative: the palette decides
+    elif accidental == 'n':
+        acc = 0                          # explicitly natural
     elif accidental[0] == '#':
         acc = len(accidental)
     else:
@@ -22,17 +24,19 @@ def _parse_degree(text):
 # <  >  ..  step:  degree  whitespace.  The step is tried before the degree so that
 # '10:' is a step and not the degree '1'; a degree may not run straight into
 # another digit or a minus sign ('1b2', '5-3').
-_TOKEN = re.compile(r'(<)|(>)|(\.\.)|(,,)|(\d+):|(-?\d+(?:b+|#+)?)(?![-\d])|\s+')
+_TOKEN = re.compile(r'(<)|(>)|(\.\.)|(,,)|(\d+):|(-?\d+(?:n|b+|#+)?)(?![-\d])|\s+')
 
 
 def parse_degrees(text):
     """Parse degrees such as '1 3 5', '<1 3 5>', and ranges.
 
-    A range 'a..b' fills in the degrees between a and b (stepping up or down as
-    needed), 'a..s:b' steps by s, and 'a..b..c' goes through waypoint b. The
-    first and last degree keep their accidentals, the ones in between have none,
-    and the end is always included even if the step does not land on it
-    ('1..4:10' is 1 5 9 10). Ranges are not allowed inside a chord.
+    A bare number is scale-relative — its accidental is None, left to the
+    palette to decide — while '4n', '4#' and '4b' carry a final accidental:
+    0, 1 and -1. A range 'a..b' fills in the degrees between a and b (stepping
+    up or down as needed), 'a..s:b' steps by s, and 'a..b..c' goes through
+    waypoint b. The first and last degree keep their accidentals, the ones in
+    between are bare, and the end is always included even if the step does not
+    land on it ('1..4:10' is 1 5 9 10). Ranges are not allowed inside a chord.
     """
     groups = []
     group = []
@@ -85,7 +89,7 @@ def parse_degrees(text):
                 if in_step:
                     step *= in_step
                 for k in range(prev_d + step, d, step):
-                    groups.append([(k, 0)])
+                    groups.append([(k, None)])
                 in_range = False
                 in_step = None
             group.append((d, acc))
@@ -110,7 +114,8 @@ def compose_degrees(pattern1 : list[Degree], pattern2 : list[Degree]):
             res_chord = []
             for d1, a1 in c1:
                 for d2, a2 in c2:
-                    res_chord.append((d1+d2-1, a1+a2))
+                    acc = None if a1 is None and a2 is None else (a1 or 0) + (a2 or 0)
+                    res_chord.append((d1+d2-1, acc))
             result.append(res_chord)
 
     return result
@@ -121,7 +126,9 @@ def format_degrees(groups, limit=None):
     With `limit`, only the first `limit` groups are written, followed by '… +N'."""
     def name(degree):
         number, acc = degree
-        return f'{number}{"#" * acc if acc > 0 else "b" * -acc}'
+        if acc is None:
+            return f'{number}'
+        return f'{number}{"n" if acc == 0 else "#" * acc if acc > 0 else "b" * -acc}'
     shown = groups if limit is None else groups[:limit]
     tokens = []
     for group in shown:
@@ -164,7 +171,8 @@ class Degrees:
     def _at(self, degree):
         """The (number, accidental) at `degree`, looping the palette.
 
-        `degree` is a (number, accidental) pair.
+        `degree` is a (number, accidental) pair; either part may be None,
+        meaning no accidental is imposed. A bare palette note stays bare.
 
         A palette's groups are flattened. All but the last note form the unit
         that repeats; the last note is a marker whose interval above the first
@@ -177,39 +185,50 @@ class Degrees:
             raise SyntaxError('Empty palette')
         if len(notes) == 1:
             number, base_acc = notes[0]
-            return (number, base_acc + acc)
-        unit = notes[:-1]
-        period_number = notes[-1][0] - notes[0][0]
-        period_acc = notes[-1][1] - notes[0][1]
-        cycles, index = divmod(step - 1, len(unit))
-        number, base_acc = unit[index]
-        return (number + cycles * period_number, base_acc + cycles * period_acc + acc)
+            shift = 0
+        else:
+            unit = notes[:-1]
+            period_number = notes[-1][0] - notes[0][0]
+            period_acc = ((notes[-1][1] or 0) - (notes[0][1] or 0))
+            cycles, index = divmod(step - 1, len(unit))
+            number, base_acc = unit[index]
+            number += cycles * period_number
+            shift = cycles * period_acc
+        if base_acc is None and acc is None and not shift:
+            return (number, None)
+        return (number, (base_acc or 0) + (acc or 0) + shift)
 
     def _degree_of(self, number, acc=0, strict=False):
         """Inverse of `_at`: the (degree, accidental) that `_at` maps here.
 
+        The accidental is final, like everywhere: a note that is exactly a
+        palette note comes back bare — None, what the scale wants — and any
+        other note keeps its own accidental, so mapping it back reproduces it.
         Spelling is preserved: a degree is chosen whose letter matches. If the
-        palette has several such degrees the one needing the smallest accidental
-        wins, then the lowest degree. A note sharing no letter with the palette
-        has no degree, and with strict=True a note that is not exactly a palette
-        note raises.
+        palette has several such degrees the one needing the smallest
+        accidental wins, then the lowest degree. A note sharing no letter with
+        the palette has no degree, and with strict=True a note that is not
+        exactly a palette note raises.
         """
+        if acc is None:
+            acc = 0
         notes = self._flat()
         if not notes:
             raise SyntaxError('Empty palette')
         name = format_degrees([[(number, acc)]])
         if len(notes) == 1:
             base, base_acc = notes[0]
-            residual = acc - base_acc
-            if strict and residual:
+            base_acc = base_acc or 0
+            if strict and acc != base_acc:
                 raise SyntaxError(f'{name} is not in the palette')
-            return (1, residual)
+            return (1, None if acc == base_acc else acc)
         unit = notes[:-1]
         period_number = notes[-1][0] - notes[0][0]
-        period_acc = notes[-1][1] - notes[0][1]
+        period_acc = (notes[-1][1] or 0) - (notes[0][1] or 0)
         length = len(unit)
         best = None
         for i, (base, base_acc) in enumerate(unit):
+            base_acc = base_acc or 0
             if period_number:
                 diff = number - base
                 if diff % period_number:
@@ -226,23 +245,31 @@ class Degrees:
             else:
                 continue
             degree = i + 1 + q * length
-            residual = acc - (base_acc + q * period_acc)
-            if best is None or (abs(residual), degree) < (abs(best[1]), best[0]):
+            residual = abs(acc - (base_acc + q * period_acc))
+            if best is None or (residual, degree) < (best[1], best[0]):
                 best = (degree, residual)
         if best is not None:
             if strict and best[1]:
                 raise SyntaxError(f'{name} is not in the palette')
-            return best
+            return (best[0], None if not best[1] else acc)
 
         raise SyntaxError(f'{name} is not in the palette')
 
     # ------------------------------------------------------------ operations
 
     def map(self, other):
-        """`self` seen in `other`: every degree resolved/selected through the
-        palette `other`. Chords of `self` are kept; `other`'s groups are flat."""
-        return Degrees([[other._at(degree) for degree in group]
-                        for group in self.groups])
+        """`self` seen in `other`: every degree mapped through the palette
+        `other`. A bare degree takes the palette's note as the scale spells
+        it; an accidental is final — it overrides the palette's, keeping the
+        letter. Chords of `self` are kept; `other`'s groups are flat."""
+        groups = []
+        for group in self.groups:
+            notes = []
+            for number, acc in group:
+                base = other._at((number, None))
+                notes.append(base if acc is None else (base[0], acc))
+            groups.append(notes)
+        return Degrees(groups)
 
     def unmap(self, other, strict=False):
         """`self`'s notes as (degree, accidental) in the palette `other`."""
@@ -259,11 +286,14 @@ class Degrees:
         `interval` is a degree, on the same number line as notes: 1 is the
         unison, 2 up a second, 3 up a third, ..., and below the unison 0 is
         down a second, -1 down a third, -2 down a fourth. An accidental adjusts
-        the interval in semitones, so '4#' is up a sharp fourth. `up=False`
-        mirrors the interval around the unison, so 2 is down a second.
+        the interval in semitones, so '4#' is up a sharp fourth; a bare
+        interval is the plain one. `up=False` mirrors the interval around the
+        unison, so 2 is down a second.
 
         The interval keeps its sound, spelled through the white keys: f4 up a
-        fourth is Bb4 (a perfect fourth), not B4.
+        fourth is Bb4 (a perfect fourth), not B4. A bare note is read as the
+        C major spelling — natural — and the result is written out in full,
+        with final accidentals.
         """
         if isinstance(interval, str):
             step, acc = _parse_degree(interval.strip())
@@ -274,13 +304,13 @@ class Degrees:
 
         sign = 1 if up else -1
         move = sign * (step - 1)
-        sound = sign * (white_keys._at((step, 0))[0] + acc)
+        sound = sign * (white_keys._at((step, 0))[0] + (acc or 0))
         groups = []
         for group in self.groups:
             notes = []
             for number, own in group:
                 letter = number + move
-                value = white_keys._at((number, 0))[0] + own + sound
+                value = white_keys._at((number, 0))[0] + (own or 0) + sound
                 notes.append((letter, value - white_keys._at((letter, 0))[0]))
             groups.append(notes)
         return Degrees(groups)
@@ -315,4 +345,4 @@ class Degrees:
 
 # the white keys, whose degrees are semitones (the closing 12 is the period
 # marker): the plane `transpose` measures through, and a palette for `>>`/`<<`
-white_keys = Degrees(parse_degrees('0 2 4 5 7 9 11 12'))
+white_keys = Degrees(parse_degrees('0n 2n 4n 5n 7n 9n 11n 12n'))
