@@ -20,10 +20,12 @@ def _is_count(value):
 def _rhythm_from_events(events, loop=None):
     """Rebuild a rhythm from realized events.
 
-    Each event is (is_rest, group, nominal, tuplets); the group is not used.
-    The written (relative) durations come back as they were, wrapped in the
-    tuplet markers they sit in. `loop`, an index into `events`, marks where the
-    cycling tail begins and gets a bare open marker.
+    Each event is (is_rest, group, nominal, tuplets); the group is not used, and
+    a tuplet is (k, j, start) — its ratio and the step it opened at, so that two
+    neighbouring tuplets of the same ratio stay distinct groups. The written
+    (relative) durations come back as they were, wrapped in the tuplet markers
+    they sit in. `loop`, an index into `events`, marks where the cycling tail
+    begins and gets a bare open marker.
     """
     rhythm = []
     open_tuplets = ()
@@ -36,7 +38,7 @@ def _rhythm_from_events(events, loop=None):
                and open_tuplets[common] == tuplets[common]):
             common += 1
         rhythm.extend([CloseMarker()] * (len(open_tuplets) - common))
-        rhythm.extend([OpenMarker(k, j) for k, j in tuplets[common:]])
+        rhythm.extend([OpenMarker(k, j) for k, j, _ in tuplets[common:]])
         open_tuplets = tuplets
         rhythm.append(RestMarker(nominal) if is_rest else nominal)
     rhythm.extend([CloseMarker()] * len(open_tuplets))
@@ -435,7 +437,7 @@ class Idea:
                     rest = isinstance(item, RestMarker)
                     nominal = item.duration if rest else item
                     steps.append((rest, None, nominal,
-                                  tuple((m[0].k, m[0].j) for m in stack
+                                  tuple((m[0].k, m[0].j, m[1]) for m in stack
                                         if m[0].k is not None)))
             loop = stack[-1][1] if stack else None
             if loop is not None:
@@ -521,7 +523,7 @@ class Idea:
                     rest = isinstance(item, RestMarker)
                     nominal = item.duration if rest else item
                     steps.append((rest, nominal,
-                                  tuple((m[0].k, m[0].j) for m in stack
+                                  tuple((m[0].k, m[0].j, m[1]) for m in stack
                                         if m[0].k is not None)))
             loop = stack[-1][1] if stack else None
         else:
@@ -561,7 +563,7 @@ class Idea:
         out = []
         for _, group, nominal, tuplets in self._realize():
             actual = nominal
-            for k, j in (tuplets or ()):
+            for k, j, _ in (tuplets or ()):
                 actual = actual * Fraction(j, k)
             out.append(([] if group is None else group, actual))
         return out

@@ -852,3 +852,14 @@ def test_render_numbers_nested_tuplets_and_closes_the_innermost(capture):
     assert '<actual-notes>7</actual-notes>' in xml       # '[k j:' ratio reaches MusicXML
     verovio = pytest.importorskip('verovio')
     assert verovio.toolkit().loadData(xml)
+
+
+def test_adjacent_equal_tuplets_get_their_own_brackets(capture):
+    # '[3: 8 8 8]*2' is two triplets, not one bracket spanning six eighths
+    idea = deg('1 2 3 4 5 6 7 8') @ rhy('[3: 8 8 8]*2 8 8')
+    Score([Part(idea, 'X')], '4/4').show()
+    xml = capture[-1]
+    assert xml.count('<tuplet type="start"') == 2
+    assert xml.count('<tuplet type="stop"') == 2
+    verovio = pytest.importorskip('verovio')
+    assert verovio.toolkit().loadData(xml)

@@ -88,7 +88,7 @@ def show_score(score: Score):
     for events in parts_events:
         for _, _, nominal, tuplets in events:
             factor = Fraction(1)
-            for k, j in (tuplets or ()):
+            for k, j, _ in (tuplets or ()):
                 factor *= Fraction(j, k)
             actuals.append(nominal * factor)
     units = lcm(4, score.beat_type, *[d.denominator for d in actuals])
@@ -124,11 +124,11 @@ def show_score(score: Score):
                    for d in range(closed, len(tuplets))]
             previous = tuplets
             factor = Fraction(1)
-            for k, j in tuplets:
+            for k, j, _ in tuplets:
                 factor *= Fraction(j, k)
             tuplet_xml = ''
             if tuplets:
-                k, j = tuplets[-1]
+                k, j = tuplets[-1][:2]
                 tuplet_xml = (f'<time-modification><actual-notes>{k}</actual-notes>'
                               f'<normal-notes>{j}</normal-notes></time-modification>')
             # a note that would cross a barline is split at the bar and tied
