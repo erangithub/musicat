@@ -198,9 +198,10 @@ class Idea:
         each take its first duration. If only this idea has one, it simply
         continues over the notes of `other`; a rhythm of only rests has
         nothing to continue over, so it sounds once and `other`'s notes then
-        take its first duration. If neither does, none is invented. A rhythm
-        that plays only rests carries no notes of its own, so it may be
-        concatenated with notes as silence.
+        take its first duration. If neither does, none is invented. Two ideas
+        with no notes just join, so their rhythms stay finite — `other` does
+        not start looping. A rhythm that plays only rests carries no notes of
+        its own, so it may be concatenated with notes as silence.
         """
         if not isinstance(other, Idea):
             raise SyntaxError(f'Illegal operand {other!r}')
@@ -289,16 +290,18 @@ class Idea:
                 rhythm.extend([OpenMarker(k, j) for k, j in first[2]])
                 rhythm.append(first[1])
                 rhythm.extend([CloseMarker()] * len(first[2]))
-        # other's own rhythm follows, open group and all; when it has none we
-        # still mark where it repeats
-        depth = 0
-        for item in other.rhythm:
-            if isinstance(item, OpenMarker):
-                depth += 1
-            elif isinstance(item, CloseMarker):
-                depth -= 1
-        if depth == 0:
-            rhythm.append(OpenMarker())
+        # other's own rhythm follows, open group and all. When the result has
+        # notes to loop over and other has no open group, we mark where it
+        # repeats; two rhythms with no notes just concatenate, and stay finite.
+        if self.content is not None or other.content is not None:
+            depth = 0
+            for item in other.rhythm:
+                if isinstance(item, OpenMarker):
+                    depth += 1
+                elif isinstance(item, CloseMarker):
+                    depth -= 1
+            if depth == 0:
+                rhythm.append(OpenMarker())
         rhythm.extend(other.rhythm)
         return rhythm
 

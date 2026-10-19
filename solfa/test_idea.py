@@ -270,8 +270,8 @@ def test_repeat_leaves_the_original_alone_and_rhythm_only_stays_explicit():
     before = repr(a)
     a * 3
     assert repr(a) == before
-    r = rhy('4 8') * 2                    # nothing to loop over: written out
-    assert r.rhythm == [F(1, 4), F(1, 8), OpenMarker(), F(1, 4), F(1, 8)]
+    r = rhy('4 8') * 2                    # no notes to loop over: written out flat
+    assert r.rhythm == [F(1, 4), F(1, 8), F(1, 4), F(1, 8)]
     assert (deg('1 2') @ rhy('4') * 3).content.groups == \
         deg('1 2 1 2 1 2').content.groups
 
@@ -349,7 +349,7 @@ def test_concat_keeps_trailing_rests_of_a():
 
 def test_concat_rhythm_only():
     r = rhy('4 8') + rhy('2')
-    assert r.rhythm == [F(1, 4), F(1, 8), OpenMarker(), F(1, 2)]
+    assert r.rhythm == [F(1, 4), F(1, 8), F(1, 2)]     # two rhythms just join, finite
     assert r.content is None
     # a rhythm that plays only rests carries no notes, so it concatenates
     # with notes as silence
@@ -366,6 +366,14 @@ def test_concat_rhythm_only():
     # but a rhythm with sounding steps is still ambiguous with layering
     with pytest.raises(SyntaxError, match=r'use @ to compose'):
         deg('1') + rhy('4 r8')
+
+
+def test_concat_rhythm_only_stays_finite():
+    # a rhythm-only repeat/concat has no notes to loop over, so it is written
+    # out flat rather than left cycling
+    r = rhy('[4 4 2]') * 2 + rhy('4')
+    assert r.rhythm == [F(1, 4), F(1, 4), F(1, 2)] * 2 + [F(1, 4)]
+    assert durations(r) == [F(1, 4), F(1, 4), F(1, 2)] * 2 + [F(1, 4)]
 
 
 def test_concat_empty_idea_is_identity():
