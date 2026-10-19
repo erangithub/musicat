@@ -59,9 +59,12 @@ def test_rhythm_groups_expand_and_nest():
     assert parse_rhythm('[3: 8*3]') == parse_rhythm('[3: 8 8 8]')
     assert sum(parse_rhythm('[5: 16*5]')) == F(1, 4)
     assert sum(parse_rhythm('[7: 16*7]')) == F(1, 4)
-    assert sum(parse_rhythm('[7:8 16*7]')) == F(1, 2)       # '[k:j' overrides the ratio
+    assert sum(parse_rhythm('[7 8: 16*7]')) == F(1, 2)      # '[k j:' overrides the ratio
+    assert parse_rhythm('[3 2: 8 8 8]') == parse_rhythm('[3: 8 8 8]')
     assert parse_rhythm('[3: 4 [3: 8 8 8] 4]')[1] == F(1, 18)
     assert sum(parse_rhythm('[3: 8+8]')) == F(1, 6)
+    # a bare number after '[' is a duration, not a tuplet numerator
+    assert parse_rhythm('[3 8 8 8]') == [F(1, 3), F(1, 8), F(1, 8), F(1, 8)]
 
 
 def test_rhythm_open_group_cycles():
@@ -93,6 +96,8 @@ def test_rhythm_illegal(text):
 def test_rhythm_errors():
     with pytest.raises(SyntaxError, match='is gone'):        # the old '|:' marker
         parse_rhythm('4 |: 8')
+    with pytest.raises(SyntaxError, match='is gone'):        # the old 'a:b' tuplet
+        parse_rhythm('[7:8 16*7]')
     with pytest.raises(SyntaxError, match='Nothing to cycle'):
         parse_rhythm('4 [')
     with pytest.raises(SyntaxError, match='Nothing to repeat'):

@@ -34,13 +34,17 @@ def parse_rhythm(text: str) -> Rhythm:
     '8 8 8'), and '[...]' groups, which nest and may themselves be repeated, are
     expanded away. An unclosed '[' is a cycling tail: everything before it plays
     once and everything after it repeats ('4 [8' is a quarter then eighths
-    forever). A '[...]' right after '[' is a tuplet, '[k:' sitting in the time of
-    the largest power of two below k ('[3: 8 8 8]', '[5: 16*5]'), and '[k:j'
-    overrides that ration ('[7:8 16*7]').
+    forever). A 'k:' right after '[' is a tuplet, its notes sitting in the time
+    of the largest power of two below k ('[3: 8 8 8]', '[5: 16*5]'); write 'k j:'
+    to override that ratio ('[7 8: 16*7]').
     """
     items = []
     stack = []
-    for token in text.split():
+    tokens = text.split()
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        i += 1
         if token == '|:':
             raise SyntaxError('"|:" is gone; write the cycle as an open group, '
                               'e.g. "4 [8"')
@@ -51,17 +55,28 @@ def parse_rhythm(text: str) -> Rhythm:
         multiplier = None
         if opens:
             header = _HEADER.match(token)
+            if header and header.group(2):
+                raise SyntaxError('"a:b" is gone; write the tuplet as "a b:", '
+                                  'e.g. "[7 8: 16*7]"')
+            shown = header.group(0) if header else None
+            k = j = None
             if header:
                 k = int(header.group(1))
-                j = int(header.group(2)) if header.group(2) else None
+                token = token[header.end():]
+            elif token.isdigit() and i < len(tokens) \
+                    and tokens[i].endswith(':') and tokens[i][:-1].isdigit():
+                shown = f'{token} {tokens[i]}'
+                k, j = int(token), int(tokens[i][:-1])
+                token = ''
+                i += 1
+            if k is not None:
                 if k < 1 or (j is not None and j < 1):
-                    raise SyntaxError(f'Illegal tuplet "{token}"')
+                    raise SyntaxError(f'Illegal tuplet "{shown}"')
                 if j is None:
                     j = 1
                     while j * 2 <= k:
                         j *= 2
                 multiplier = Fraction(j, k)
-                token = token[header.end():]
         closes = 0
         repeat = None
         suffix = []

@@ -143,7 +143,8 @@ Durations are whole-note relative `Fraction`s (`1` is a whole, `4` a quarter). A
 of a whole, dots lengthen it (`4.`, `4..`), `r` prefixes a rest (`r4`), and a `+`-joined chain is one
 longer event (`4+8` is a dotted quarter). A trailing `*n` repeats a token (`8*3`), and `[ ... ]` groups
 nest and may be repeated; `[k: ...]` is a tuplet, the notes sitting in the time of the largest power of
-two below `k` (`[3: 8 8 8]`, `[7:8 16*7]`). A rhythm loops over the content. An unclosed `[` marks where
+two below `k` (`[3: 8 8 8]`), and `[k j: ...]` overrides that ratio (`[7 8: 16*7]`). A rhythm loops over
+the content. An unclosed `[` marks where
 the repeating part starts (`'4 [8'` is a quarter then eighths forever); without one the whole rhythm
 repeats. On its own a cycling rhythm is infinite, so it needs content or a bounded slice.
 `_realize`/`events()` unroll an idea into `(pitch group, duration)` pairs, which is what rendering
