@@ -64,18 +64,18 @@ deg('1 2') * 3                      # 1 2 1 2 1 2
 
 An idea also transposes. An interval is a degree on the same number line as notes: `1`
 is the unison, `2` up a second, `0` down a second, `-1` down a third, `-2` down a fourth.
-`transpose(interval, up=False)` mirrors it around the
+`trans(interval, up=False)` mirrors it around the
 unison, so `2` becomes down a second. The interval keeps its *sound*, spelled through the
-white keys: a fourth above `f4` is `bb4`, not `b4`. `diatonic(interval)` instead moves by
+white keys: a fourth above `f4` is `bb4`, not `b4`. `diatrans(interval)` instead moves by
 whole letter-steps, keeping each note's accidental: a fourth above `f4` is `b4`.
 
 ```python
-pit('c4 e4 g4').transpose('4#')     # f#4 a#4 c#5
-pit('c4 e4 g4').transpose('0')      # b3 d#4 f#4   (a second down)
-pit('c4 e4 g4').transpose('-1')     # a3 c#4 e4    (a third down)
-pit('c4').transpose('2', up=False)  # bb3          (a second down)
-pit('f4').transpose('4')            # bb4  (a perfect fourth)
-pit('f4').diatonic('4')             # b4   (the letter, not the sound)
+pit('c4 e4 g4').trans('4#')     # f#4 a#4 c#5
+pit('c4 e4 g4').trans('0')      # b3 d#4 f#4   (a second down)
+pit('c4 e4 g4').trans('-1')     # a3 c#4 e4    (a third down)
+pit('c4').trans('2', up=False)  # bb3          (a second down)
+pit('f4').trans('4')            # bb4  (a perfect fourth)
+pit('f4').diatrans('4')         # b4   (the letter, not the sound)
 ```
 
 An idea also indexes and slices like a list, over the events as they play — each note or rest with
@@ -167,10 +167,11 @@ notes break runs, and beams never cross a barline.
 | `idea * other` | Repeat by an int (`idea * 3`). |
 | `idea + other` | Play this idea, then `other`. |
 | `idea[key]` | One event as a one-event idea, or a shorter idea over a slice of the events (`idea[0:-3]`). |
-| `idea.transpose(interval, up=True)` | Move every note by a musical interval (`'4#'`, `'0'`, `'-1'`), keeping its sound; `up=False` mirrors it. |
-| `idea.diatonic(interval, up=True)` | Move every note by whole letter-steps, keeping its accidental. |
-| `idea.invert(low, high)` | Mirror every degree around the `low`..`high` axis; the rhythm is kept. |
-| `idea.retrograde(...)` | Play the idea backwards; `retrograde_degrees`/`retrograde_rhythm` pick which layers reverse. |
+| `idea.trans(interval, up=True)` | Move every note by a musical interval (`'4#'`, `'0'`, `'-1'`), keeping its sound; `up=False` mirrors it. |
+| `idea.diatrans(interval, up=True)` | Move every note by whole letter-steps, keeping its accidental. |
+| `idea.inv(low, high)` | Chromatically mirror every degree around the axis — the sound mirrors exactly, accidentals adjusted; the rhythm is kept. |
+| `idea.diainv(low, high)` | Diatonically mirror every degree around the axis — letters kept; the rhythm is kept. |
+| `idea.retro(...)` | Play the idea backwards; `retrograde_degrees`/`retrograde_rhythm` pick which layers reverse. |
 | `idea >> palette` | Map/select degrees through a palette (an `Idea`). |
 | `idea << palette` | Recover the degrees of pitches in a palette. |
 | `Degrees(groups)` | The one content type: groups of `(number, accidental)`. |

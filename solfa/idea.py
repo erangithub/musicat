@@ -1,6 +1,7 @@
 from .errors import SyntaxError
 from .pitches import parse_pitches
-from .degrees import parse_degrees, format_degrees, _parse_degree, Degrees
+from .degrees import (parse_degrees, format_degrees, _parse_degree, white_keys,
+                      Degrees)
 from .rhythm import (parse_rhythm, format_rhythm, rhythm_steps,
                      rhythm_from_steps, WHOLE)
 
@@ -134,7 +135,7 @@ class Idea:
         one_pass = [(rest, duration) for rest, _, duration in self._realize()]
         return Idea(content, rhythm_from_steps(one_pass, 0))
 
-    def transpose(self, interval, up=True):
+    def trans(self, interval, up=True):
         """Move every note by a musical interval, measured through the white keys.
 
         `interval` is a degree, on the same number line as notes: 1 is the
@@ -145,10 +146,10 @@ class Idea:
             raise SyntaxError('A rhythm-only idea has nothing to transpose')
         return Idea(self.content.transpose(interval, up), self.rhythm)
 
-    def diatonic(self, interval, up=True):
+    def diatrans(self, interval, up=True):
         """Move every note by whole letter-steps, keeping its accidental.
 
-        `interval` counts letters on the same number line as `transpose`: 1 is
+        `interval` counts letters on the same number line as `trans`: 1 is
         the unison, 2 up a letter, 0 down a letter, -1 down two letters.
         `up=False` mirrors it, so 2 is down a letter. Rhythms are kept as they
         are.
@@ -230,13 +231,44 @@ class Idea:
 
     # ------------------------------------------------- inverting, retrograding
 
-    def invert(self, low, high):
-        """Mirror every degree around the axis `low`..`high`; rhythm is kept.
+    def inv(self, low, high):
+        """Chromatically mirror every degree around `low`..`high`; rhythm kept.
+
+        The number line mirrors as in `diainv`, but accidentals are corrected
+        by the white-key semitone discrepancy so the *sound* mirrors exactly:
+        over the axis C..G, E ('3') becomes Eb ('3b') and over C..C it
+        becomes Ab ('6b'). Accepts degrees as text or (number, accidental)
+        tuples, like `trans`.
+        """
+        if self.content is None:
+            raise SyntaxError('A rhythm-only idea has nothing to invert')
+        axis = []
+        for value in (low, high):
+            if isinstance(value, str):
+                axis.append(_parse_degree(value.strip()))
+            elif isinstance(value, tuple) and len(value) == 2:
+                axis.append(value)
+            else:
+                raise SyntaxError(f'Illegal axis {value!r}')
+        (low_step, low_acc), (high_step, high_acc) = axis
+        base = (low_acc + high_acc
+                + white_keys._at((low_step, 0))[0]
+                + white_keys._at((high_step, 0))[0])
+        groups = [[(low_step + high_step - number,
+                    base - acc - white_keys._at((number, 0))[0]
+                    - white_keys._at((low_step + high_step - number, 0))[0])
+                   for number, acc in group]
+                  for group in self.content.groups]
+        return Idea(Degrees(groups), self.rhythm)
+
+    def diainv(self, low, high):
+        """Diatonically mirror every degree around `low`..`high`; rhythm kept.
 
         Each degree's distance from `low` becomes the same distance from
-        `high`, so `invert('1', '5')` turns '1 2 3 4 5' into '5 4 3 2 1' and
-        '3#' into '3b'. Accepts degrees as text or (number, accidental)
-        tuples, like `transpose`.
+        `high`, so `diainv('1', '5')` turns '1 2 3 4 5' into '5 4 3 2 1' and
+        '3#' into '3b'. The mirror keeps letters, so E over the axis C..G
+        stays E. Accepts degrees as text or (number, accidental) tuples,
+        like `trans`.
         """
         if self.content is None:
             raise SyntaxError('A rhythm-only idea has nothing to invert')
@@ -254,7 +286,7 @@ class Idea:
                   for group in self.content.groups]
         return Idea(Degrees(groups), self.rhythm)
 
-    def retrograde(self, retrograde_degrees=True, retrograde_rhythm=True):
+    def retro(self, retrograde_degrees=True, retrograde_rhythm=True):
         """Play the idea backwards.
 
         `retrograde_degrees` reverses the order of the notes,

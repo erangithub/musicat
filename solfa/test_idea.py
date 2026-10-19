@@ -345,73 +345,81 @@ def test_concat_before_resolving():
 
 # -------------------------------------------------- transpose / diatonic
 
-def test_transpose_counts_intervals_on_the_degree_line():
+def test_trans_counts_intervals_on_the_degree_line():
     m = pit('c4 e4 g4')
-    assert names(m.transpose('4#')) == [['f#4'], ['a#4'], ['c#5']]
-    assert names(m.transpose('2')) == [['d4'], ['f#4'], ['a4']]       # a second up
-    assert m.transpose('1') == m                                      # the unison
-    assert names(m.transpose('0')) == [['b3'], ['d#4'], ['f#4']]      # a second down
-    assert names(m.transpose('-1')) == [['a3'], ['c#4'], ['e4']]      # a third down
+    assert names(m.trans('4#')) == [['f#4'], ['a#4'], ['c#5']]
+    assert names(m.trans('2')) == [['d4'], ['f#4'], ['a4']]       # a second up
+    assert m.trans('1') == m                                      # the unison
+    assert names(m.trans('0')) == [['b3'], ['d#4'], ['f#4']]      # a second down
+    assert names(m.trans('-1')) == [['a3'], ['c#4'], ['e4']]      # a third down
 
 
-def test_transpose_accepts_a_tuple():
+def test_trans_accepts_a_tuple():
     m = pit('c4')
-    assert m.transpose((4, 1)) == m.transpose('4#')
+    assert m.trans((4, 1)) == m.trans('4#')
 
 
-def test_transpose_keeps_the_sounds():
-    assert names(pit('c4').transpose('4')) == [['f4']]            # a fourth up
-    assert names(pit('f4').transpose('4')) == [['bb4']]           # still a fourth
-    assert names(pit('c4').transpose('0')) == [['b3']]            # a second down
-    assert names(pit('c4').transpose('2', up=False)) == [['bb3']] # mirrored: a second down
+def test_trans_keeps_the_sounds():
+    assert names(pit('c4').trans('4')) == [['f4']]            # a fourth up
+    assert names(pit('f4').trans('4')) == [['bb4']]           # still a fourth
+    assert names(pit('c4').trans('0')) == [['b3']]            # a second down
+    assert names(pit('c4').trans('2', up=False)) == [['bb3']] # mirrored: a second down
     m = pit('c4 e4 g4')
-    assert names(m.transpose('2', up=False)) == [['bb3'], ['d4'], ['f4']]
-    assert names(m.transpose('-1', up=False)) == [['eb4'], ['g4'], ['bb4']]
+    assert names(m.trans('2', up=False)) == [['bb3'], ['d4'], ['f4']]
+    assert names(m.trans('-1', up=False)) == [['eb4'], ['g4'], ['bb4']]
 
 
-def test_diatonic_moves_letters_and_keeps_the_accidental():
-    assert names(pit('c4').diatonic(4)) == [['f4']]
-    assert names(pit('f4').diatonic(4)) == [['b4']]               # letters, not sound
-    assert names(pit('c4').diatonic(0)) == [['b3']]               # a letter down
-    assert names(pit('c4').diatonic(2, up=False)) == [['b3']]     # mirrored: a letter down
-    assert names(pit('f#4').diatonic(4)) == [['b#4']]             # the sharp rides along
+def test_diatrans_moves_letters_and_keeps_the_accidental():
+    assert names(pit('c4').diatrans(4)) == [['f4']]
+    assert names(pit('f4').diatrans(4)) == [['b4']]               # letters, not sound
+    assert names(pit('c4').diatrans(0)) == [['b3']]               # a letter down
+    assert names(pit('c4').diatrans(2, up=False)) == [['b3']]     # mirrored: a letter down
+    assert names(pit('f#4').diatrans(4)) == [['b#4']]             # the sharp rides along
     m = pit('c4 e4 g4')
-    assert m.diatonic('1') == m                                       # the unison
+    assert m.diatrans('1') == m                                       # the unison
     with pytest.raises(SyntaxError, match='whole letters'):           # no accidentals allowed
-        m.diatonic('4#')
+        m.diatrans('4#')
     # the scale constructors lean on diatonic; low roots must not overshoot
     assert format_pitches(major_scale('b3').content.groups) == 'b3 c#4 d#4 e4 f#4 g#4 a#4 b4'
     assert format_pitches(minor_scale('e3').content.groups) == 'e3 f#3 g3 a3 b3 c4 d4 e4'
 
 
-def test_transpose_keeps_rhythm_and_needs_notes():
+def test_trans_keeps_rhythm_and_needs_notes():
     r = deg('1 2') @ rhy('4 8')
-    assert r.transpose('2').rhythm == r.rhythm
-    assert r.diatonic('2').rhythm == r.rhythm
+    assert r.trans('2').rhythm == r.rhythm
+    assert r.diatrans('2').rhythm == r.rhythm
     with pytest.raises(SyntaxError, match='nothing to transpose'):
-        rhy('4').transpose('2')
+        rhy('4').trans('2')
     with pytest.raises(SyntaxError, match='nothing to transpose'):
-        rhy('4').diatonic('2')
+        rhy('4').diatrans('2')
     with pytest.raises(SyntaxError, match='Illegal degree'):
-        pit('c').transpose('1 2')
+        pit('c').trans('1 2')
 
 
-def test_invert_and_retrograde():
-    # invert mirrors each degree around the low..high axis, rhythm kept
-    assert deg('1 2 3 4 5').invert('1', '5') == deg('5 4 3 2 1')
-    assert deg('3#').invert('1', '5') == deg('3b')        # the accidental mirrors too
-    assert (deg('1 3') @ rhy('4 8')).invert('1', '5') == deg('5 3') @ rhy('4 8')
+def test_inv_diainv_and_retro():
+    # diainv mirrors each degree around the low..high axis, rhythm kept
+    assert deg('1 2 3 4 5').diainv('1', '5') == deg('5 4 3 2 1')
+    assert deg('3#').diainv('1', '5') == deg('3b')      # the accidental mirrors too
+    assert (deg('1 3') @ rhy('4 8')).diainv('1', '5') == deg('5 3') @ rhy('4 8')
+    # inv keeps the sound: same number line, accidentals corrected so the
+    # semitone distance is exact
+    assert deg('3').diainv('1', '5') == deg('3')            # diatonic keeps the letter
+    assert deg('3').inv('1', '5') == deg('3b')              # E -> Eb
+    assert deg('1 2 3 4 5').inv('1', '5') == deg('5 4 3b 2 1')
+    assert deg('3').inv('1', '8') == deg('6b')              # E -> Ab over the octave
     with pytest.raises(SyntaxError, match='nothing to invert'):
-        rhy('4').invert('1', '5')
+        rhy('4').diainv('1', '5')
+    with pytest.raises(SyntaxError, match='nothing to invert'):
+        rhy('4').inv('1', '5')
     with pytest.raises(SyntaxError, match='Illegal axis'):
-        deg('1').invert(3, '5')
-    # retrograde reverses; each flag controls one layer
-    assert deg('1 2 3').retrograde() == deg('3 2 1')
+        deg('1').diainv(3, '5')
+    # retro reverses; each flag controls one layer
+    assert deg('1 2 3').retro() == deg('3 2 1')
     both = deg('1 2 3') @ rhy('4 8 16')
-    assert both.retrograde() == deg('3 2 1') @ rhy('16 8 4')
-    assert both.retrograde(retrograde_rhythm=False) == deg('3 2 1') @ rhy('4 8 16')
-    assert both.retrograde(retrograde_degrees=False) == deg('1 2 3') @ rhy('16 8 4')
-    assert (deg('1 2') @ rhy('4 r8 16')).retrograde() == deg('2 1') @ rhy('16 r8 4')
+    assert both.retro() == deg('3 2 1') @ rhy('16 8 4')
+    assert both.retro(retrograde_rhythm=False) == deg('3 2 1') @ rhy('4 8 16')
+    assert both.retro(retrograde_degrees=False) == deg('1 2 3') @ rhy('16 8 4')
+    assert (deg('1 2') @ rhy('4 r8 16')).retro() == deg('2 1') @ rhy('16 r8 4')
 
 
 # -------------------------------------------------------- events / looping
