@@ -56,9 +56,13 @@ def test_rhythm_groups_expand_and_nest():
     assert parse_rhythm('[4 8]') == [F(1, 4), F(1, 8)]
     assert parse_rhythm('[4 8]*2') == [F(1, 4), F(1, 8)] * 2
     # three in the time of two: the written eighths, under a 3:2 marker
+    assert parse_rhythm('[3:8]') == parse_rhythm('[3: 8]')     # no space needed
+    assert parse_rhythm('[3:8]*2') == parse_rhythm('[3: 8]*2')
     assert parse_rhythm('[3: 8 8 8]') == \
         [OpenMarker(3, 2), F(1, 8), F(1, 8), F(1, 8), CloseMarker()]
     assert parse_rhythm('[3: 8*3]') == parse_rhythm('[3: 8 8 8]')
+    # an inner '*n' glued to the closing ']*m' still multiplies the duration
+    assert parse_rhythm('[3: 8*3]*2') == parse_rhythm('[3: 8 8 8 ]*2')
     assert sum(d for _, d in rhy('[5: 16*5]').events()) == F(1, 4)
     assert sum(d for _, d in rhy('[7: 16*7]').events()) == F(1, 4)
     assert sum(d for _, d in rhy('[7 8: 16*7]').events()) == F(1, 2)  # '[k j:' overrides
@@ -112,8 +116,6 @@ def test_rhythm_illegal(text):
 def test_rhythm_errors():
     with pytest.raises(SyntaxError, match='is gone'):        # the old '|:' marker
         parse_rhythm('4 |: 8')
-    with pytest.raises(SyntaxError, match='is gone'):        # the old 'a:b' tuplet
-        parse_rhythm('[7:8 16*7]')
     with pytest.raises(SyntaxError, match='Nothing to cycle'):
         parse_rhythm('4 [')
     with pytest.raises(SyntaxError, match='Nothing to repeat'):

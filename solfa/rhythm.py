@@ -62,7 +62,7 @@ Duration = Fraction
 Element = Fraction | OpenMarker | CloseMarker | RestMarker
 Rhythm = list[Element]
 
-_HEADER = re.compile(r'(\d+):(\d*)')
+_HEADER = re.compile(r'(\d+):')
 _REPEAT = re.compile(r'\*(\d+)$')
 _PART = re.compile(r'(\d+)(\.*)')
 
@@ -100,11 +100,8 @@ def parse_rhythm(text: str) -> Rhythm:
         k = j = None
         if opens:
             header = _HEADER.match(token)
-            if header and header.group(2):
-                raise SyntaxError('"a:b" is gone; write the tuplet as "a b:", '
-                                  'e.g. "[7 8: 16*7]"')
-            shown = header.group(0) if header else None
             if header:
+                shown = header.group(0)
                 k = int(header.group(1))
                 token = token[header.end():]
             elif token.isdigit() and i < len(tokens) \
@@ -132,13 +129,21 @@ def parse_rhythm(text: str) -> Rhythm:
             suffix.append(('repeat', int(cover.group(1))))
             token = token[:cover.start()]
         closes = suffix.count('close')
-        repeat = None
+        # suffix was read right-to-left; in written order the repeats before the
+        # first ']' multiply the duration itself, the ones after it multiply the
+        # group that ']' closes ('[3: 8*3]*2' is three eighths, twice over)
+        body_repeat = group_repeat = 1
+        closed = False
+        for op in reversed(suffix):
+            if op == 'close':
+                closed = True
+            elif closed:
+                group_repeat *= op[1]
+            else:
+                body_repeat *= op[1]
         for op in suffix:
-            if op != 'close':
-                repeat = op[1]
-                break
-        if repeat is not None and repeat < 1:
-            raise SyntaxError('A repeat count must be a positive integer')
+            if op != 'close' and op[1] < 1:
+                raise SyntaxError('A repeat count must be a positive integer')
         for _ in range(opens):
             stack.append([None, None, []])
         if k is not None:
@@ -160,17 +165,11 @@ def parse_rhythm(text: str) -> Rhythm:
                     raise SyntaxError(f'Illegal duration "{part}"')
                 dots = match.group(2)
                 total += Fraction(1, number) * (2 - Fraction(1, 2 ** len(dots)))
-            if closes > 0 and repeat is not None and suffix[0] != 'close':
-                body_repeat = 1
-            else:
-                body_repeat = repeat if repeat is not None else 1
             target = stack[-1][2] if stack else items
             for _ in range(body_repeat):
                 target.append(RestMarker(total) if rest else total)
-        elif repeat is not None and closes == 0:
-            raise SyntaxError(f'Nothing to repeat with "*{repeat}"')
-        group_repeat = (repeat if repeat is not None and closes > 0
-                        and suffix[0] != 'close' else 1)
+        elif body_repeat != 1 and closes == 0:
+            raise SyntaxError(f'Nothing to repeat with "*{body_repeat}"')
         blocks = []
         for _ in range(closes):
             if not stack:
