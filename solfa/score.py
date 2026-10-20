@@ -18,6 +18,10 @@ class Part:
         from . import render_verovio
         render_verovio.show_score(Score([self], time))
 
+    def play(self, time='4/4'):
+        from . import playback
+        playback.play(Score([self], time))
+
 
 class Score:
     def __init__(self, parts, time='4/4'):
@@ -46,3 +50,12 @@ class Score:
     def show(self):
         from . import render_verovio
         render_verovio.show_score(self)
+
+    def play(self):
+        from . import playback
+        playback.play(self)
+
+    def _repr_svg_(self):
+        self.play()
+        self.show()
+        return None

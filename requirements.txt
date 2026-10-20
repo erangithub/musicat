@@ -1,3 +1,4 @@
 verovio
 notebook
 pytest
+pretty_midi

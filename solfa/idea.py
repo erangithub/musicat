@@ -495,8 +495,14 @@ class Idea:
         from . import Part
         Part(self).show(time)
 
+    def play(self, time='4/4'):
+        from . import Part
+        Part(self).play(time)
+
     def _repr_svg_(self):
-        return self.show()
+        self.play()
+        self.show()
+        return None
 
     # -------------------------------------------------------------- events
 

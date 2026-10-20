@@ -2,15 +2,15 @@ import pytest
 from fractions import Fraction as F
 
 from solfa import (Idea, Degrees, Part, Score, SyntaxError, format_pitches,
-                     deg, major_scale, minor_scale, pit, rhy)
+                     deg, major, minor, pit, rhy)
 from solfa.rhythm import (OpenMarker, CloseMarker, RestMarker, parse_rhythm,
                           format_rhythm)
 
 SIXTH_DIM = pit('c4 d e f g ab a b c5')
 PALETTES = {
-    'major C': major_scale('c'),
-    'major F': major_scale('f'),
-    'minor A': minor_scale('a'),
+    'major C': major('c'),
+    'major F': major('f'),
+    'minor A': minor('a'),
     'triad': pit('d4 f a d5'),
     'sixth-dim': SIXTH_DIM,
     'pentatonic': pit('c0 d e g a c1'),
@@ -295,7 +295,7 @@ def test_repeat_errors():
 
 
 def test_repeat_resolves_like_anything_else():
-    assert names(deg('1 2') * 2 >> major_scale('c')) == [['c4'], ['d4'], ['c4'], ['d4']]
+    assert names(deg('1 2') * 2 >> major('c')) == [['c4'], ['d4'], ['c4'], ['d4']]
 
 
 # ------------------------------------------------ + : concatenation (rows)
@@ -404,7 +404,7 @@ def test_concat_errors():
 
 
 def test_concat_before_resolving():
-    phrase = deg('1 2') @ rhy('4') + deg('5') @ rhy('2') >> major_scale('c')
+    phrase = deg('1 2') @ rhy('4') + deg('5') @ rhy('2') >> major('c')
     assert ev(phrase) == [('c4', F(1, 4)), ('d4', F(1, 4)), ('g4', F(1, 2))]
 
 
@@ -448,8 +448,8 @@ def test_diatrans_moves_letters_and_keeps_the_accidental():
     with pytest.raises(SyntaxError, match='whole letters'):           # no accidentals allowed
         m.diatrans('4#')
     # the scale constructors lean on diatonic; low roots must not overshoot
-    assert format_pitches(major_scale('b3').content.groups) == 'b3 c#4 d#4 e4 f#4 g#4 a#4 b4'
-    assert format_pitches(minor_scale('e3').content.groups) == 'e3 f#3 g3 a3 b3 c4 d4 e4'
+    assert format_pitches(major('b3').content.groups) == 'b3 c#4 d#4 e4 f#4 g#4 a#4 b4'
+    assert format_pitches(minor('e3').content.groups) == 'e3 f#3 g3 a3 b3 c4 d4 e4'
 
 
 def test_trans_keeps_rhythm_and_needs_notes():
@@ -583,7 +583,7 @@ def test_events_degrees_resolve_through_the_base():
 
 def test_part_accepts_degrees():
     Part(deg('1 2'))
-    Part(deg('1 2') >> major_scale('c'))
+    Part(deg('1 2') >> major('c'))
 
 
 # --------------------------------------------------------- >> and << (palette)
@@ -596,26 +596,26 @@ def test_degrees_to_pitches():
 
 def test_rhythm_survives_both_directions():
     r = rhy('4 r4 [2')
-    there = (deg('1 2') @ r) >> major_scale('c')
-    back = there << major_scale('c')
+    there = (deg('1 2') @ r) >> major('c')
+    back = there << major('c')
     assert there.rhythm == back.rhythm == r.rhythm
     assert back.content.groups == [[(1, None)], [(2, None)]]    # exact notes come back bare
 
 
 def test_pitches_to_degrees_chromatic_and_spelling():
-    got = pit('c4 db4 c#4 d4') << major_scale('c')
+    got = pit('c4 db4 c#4 d4') << major('c')
     assert got.content.groups == [[(1, None)], [(2, -1)], [(1, 1)], [(2, None)]]
     assert got.content.groups[1] != got.content.groups[2]      # enharmonics stay distinct
 
 
 def test_pitches_to_degrees_chords_and_octaves():
-    got = pit('<c4 e g> <c5 e g>') << major_scale('c')
+    got = pit('<c4 e g> <c5 e g>') << major('c')
     assert got.content.groups == [[(1, None), (3, None), (5, None)],
                                   [(8, None), (10, None), (12, None)]]
 
 
 def test_strict():
-    c = major_scale('c')
+    c = major('c')
     assert (pit('c d e') << c).content.groups == [[(1, None)], [(2, None)], [(3, None)]]
     with pytest.raises(SyntaxError, match='not in the palette'):
         pit('c#4').content.unmap(c.content, strict=True)
@@ -664,16 +664,16 @@ def test_degree_roundtrip_exact_for_distinct_letters(name):
 
 
 def test_reharmonize_pipeline():
-    out = pit('c e g') << major_scale('c') >> pit('d4 f a d5')
+    out = pit('c e g') << major('c') >> pit('d4 f a d5')
     assert names(out) == [['d4'], ['a4'], ['f5']]
     # a final accidental is final: it overrides the scale, keeping the letter
-    assert (deg('4n') >> major_scale('f')).content.groups == [[(7, 0)]]   # B natural, not Bb
-    assert (deg('3#') >> major_scale('eb')).content.groups == [[(5, 1)]]  # G#, not G
-    assert (deg('3') >> major_scale('eb')).content.groups == [[(5, 0)]]   # bare: the scale's G
+    assert (deg('4n') >> major('f')).content.groups == [[(7, 0)]]   # B natural, not Bb
+    assert (deg('3#') >> major('eb')).content.groups == [[(5, 1)]]  # G#, not G
+    assert (deg('3') >> major('eb')).content.groups == [[(5, 0)]]   # bare: the scale's G
 
 
 def test_each_operator_accepts_only_its_own_direction():
-    c = major_scale('c')
+    c = major('c')
     with pytest.raises(SyntaxError, match='nothing to map'):
         rhy('4') >> c
     with pytest.raises(SyntaxError, match='nothing to map'):

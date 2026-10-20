@@ -2,9 +2,9 @@
 
 Bars 1-8.
 """
-from solfa import Idea, Part, Score, deg, major_scale, pit, rhy
+from solfa import Idea, Part, Score, deg, major, pit, rhy
 
-C = major_scale('c')
+C = major('c')
 
 # ---------------------------------------------------------------- right hand
 
