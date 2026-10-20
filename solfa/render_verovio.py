@@ -121,7 +121,7 @@ def show_score(score: Score):
             begin = [f'<tuplet type="start" number="{d + 1}"/>'
                      for d in range(opened, len(tuplets))]
             end = [f'<tuplet type="stop" number="{d + 1}"/>'
-                   for d in range(closed, len(tuplets))]
+                   for d in reversed(range(closed, len(tuplets)))]
             previous = tuplets
             factor = Fraction(1)
             for k, j, _ in tuplets:
