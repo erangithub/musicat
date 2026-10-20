@@ -25,7 +25,7 @@ def parse_pitches(text):
         if not match:
             raise SyntaxError(f'Illegal pitch name "{name}"')
         run = match.group(2)
-        acc = 0 if not run else (len(run) if run[0] == '#' else -len(run))
+        acc = None if not run else (len(run) if run[0] == '#' else -len(run))
         which = int(match.group(3)) if match.group(3) else octave
         number = LETTERS.index(match.group(1).lower()) + 1 - ORIGIN + which * 7
         return number, acc, match.group(3)
@@ -71,17 +71,6 @@ def format_pitches(groups, limit=None):
     if len(shown) < len(groups):
         tokens.append(f'… +{len(groups) - len(shown)}')
     return ' '.join(tokens)
-
-
-def major_scale(root_str):
-    """The major scale on `root_str` as an idea, closing on its octave."""
-    from .idea import Idea
-    p, acc = parse_pitches(root_str).groups[0][0]
-    letter = ((p - 1) % 7) + 1
-    shift = 7 * ((p - 1) // 7)          # whole octaves down to the root's octave
-    return Idea(Degrees(parse_degrees('1..8')).diatonic(shift + 1)
-                                   .transpose((letter, acc)))
-
 
 def minor_scale(root_str):
     """The natural minor scale on `root_str` as an idea, closing on its octave."""

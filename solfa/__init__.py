@@ -1,5 +1,6 @@
 from .errors import SyntaxError
-from .pitches import parse_pitches, format_pitches, major_scale, minor_scale
+from .pitches import parse_pitches, format_pitches
+from .scales import major, minor, melodic_minor, wholetone
 from .rhythm import (DOUBLE_DOT, DOT, EIGHTH, QUARTER, SIXTEENTH, THIRTY_SECOND,
                      WHOLE, HALF, Duration, Element, Rhythm, OpenMarker,
                      CloseMarker, RestMarker, parse_rhythm)
