@@ -104,8 +104,8 @@ def show_score(score: Score):
         measures = []
         notes = []
         filled = 0
-        shown = set()                      # (letter, octave) altered earlier in this bar
-        previous = ()                      # the tuplets of the event before this one
+        shown = set()
+        previous = ()
         for index, (_, group, nominal, tuplets) in enumerate(events):
             tuplets = tuplets or ()
             following = ((events[index + 1][3] or ())
@@ -131,10 +131,8 @@ def show_score(score: Score):
                 k, j = tuplets[-1][:2]
                 tuplet_xml = (f'<time-modification><actual-notes>{k}</actual-notes>'
                               f'<normal-notes>{j}</normal-notes></time-modification>')
-            # a note that would cross a barline is split at the bar and tied
-            # to its continuation, so every bar fills exactly
             remaining = int(nominal * factor * units)
-            carried = False                     # a tie arriving from the last bar
+            carried = False
             first = True
             while remaining > 0:
                 ticks = min(remaining, bar_ticks - filled)
@@ -156,11 +154,11 @@ def show_score(score: Score):
                 if not start:
                     notations.extend(end)
                 if not group:
-                    body = (f'<note><rest/><duration>{ticks}</duration>{tie_xml}'
+                    body_note = (f'<note><rest/><duration>{ticks}</duration>{tie_xml}'
                             f'<voice>1</voice>'
                             f'<type>{name}</type>{dots_xml}{tuplet_xml}</note>')
                 else:
-                    body = ''
+                    body_note = ''
                     for i, (number, alter) in enumerate(group):
                         alter = alter or 0
                         letter = LETTERS[(number - 1) % 7].upper()
@@ -170,17 +168,17 @@ def show_score(score: Score):
                         if alter:
                             shown.add(slot)
                         elif slot in shown:
-                            shown.discard(slot)    # this natural cancels an earlier accidental
+                            shown.discard(slot)
                             run = 'n'
                         symbol = acc_map[run]
                         acc = f'<accidental>{symbol}</accidental>' if symbol else ''
                         alt = f'<alter>{alter}</alter>' if alter else ''
-                        body += ('<note><chord/>' if i else '<note>') + (
+                        body_note += ('<note><chord/>' if i else '<note>') + (
                             f'<pitch><step>{letter}</step>{alt}'
                             f'<octave>{octave}</octave></pitch>'
                             f'<duration>{ticks}</duration>{tie_xml}<voice>1</voice>'
                             f'<type>{name}</type>{dots_xml}{acc}{tuplet_xml}</note>')
-                notes.append((body, ticks, None if not group else name, notations))
+                notes.append((body_note, ticks, None if not group else name, notations))
                 filled += ticks
                 remaining -= ticks
                 carried = start
@@ -196,7 +194,7 @@ def show_score(score: Score):
                         for (note, _, _, n), beam in zip(notes, beams)))
                     notes = []
                     filled = 0
-                    shown = set()               # a new bar starts fresh
+                    shown = set()
         if notes:
             beams = _beams([(t, kind) for _, t, kind, _ in notes], beat_ticks, group_ticks)
             measures.append(''.join(
@@ -206,11 +204,51 @@ def show_score(score: Score):
                          + '</note>', 1)
                 for (note, _, _, n), beam in zip(notes, beams)))
 
+        clef = getattr(part, 'clef', None) or getattr(score, 'clef', None)
+        if isinstance(clef, str):
+            if clef.lower() in ('bass', 'f'):
+                clef_xml = '<clef><sign>F</sign><line>4</line></clef>'
+            elif clef.lower() in ('alto', 'c'):
+                clef_xml = '<clef><sign>C</sign><line>3</line></clef>'
+            elif clef.lower() in ('tenor',):
+                clef_xml = '<clef><sign>C</sign><line>4</line></clef>'
+            else:
+                clef_xml = '<clef><sign>G</sign><line>2</line></clef>'
+        else:
+            clef_xml = '<clef><sign>G</sign><line>2</line></clef>'
+
+        key_sig = getattr(part, 'key', None) or getattr(score, 'key', None)
+        fifths = 0
+        mode = 'major'
+        if key_sig:
+            s = str(key_sig).strip()
+            if s.endswith('m') and not s.endswith('maj'):
+                mode = 'minor'
+                root = s[:-1]
+            elif s.lower().endswith('min'):
+                mode = 'minor'
+                root = s[:-3]
+            elif s.lower().endswith('minor'):
+                mode = 'minor'
+                root = s[:-5]
+            else:
+                mode = 'major'
+                root = s
+            major_fifths = {'C': 0, 'G': 1, 'D': 2, 'A': 3, 'E': 4, 'B': 5, 'F#': 6, 'C#': 7,
+                            'F': -1, 'Bb': -2, 'Eb': -3, 'Ab': -4, 'Db': -5, 'Gb': -6, 'Cb': -7}
+            minor_fifths = {'A': 0, 'E': 1, 'B': 2, 'F#': 3, 'C#': 4, 'G#': 5, 'D#': 6, 'A#': 7,
+                            'D': -1, 'G': -2, 'C': -3, 'F': -4, 'Bb': -5, 'Eb': -6, 'Ab': -7}
+            root_clean = root.strip()
+            if mode == 'minor':
+                fifths = minor_fifths.get(root_clean, minor_fifths.get(root_clean.capitalize(), 0))
+            else:
+                fifths = major_fifths.get(root_clean, major_fifths.get(root_clean.capitalize(), 0))
+        key_xml = f'<key><fifths>{fifths}</fifths>' + (f'<mode>{mode}</mode>' if mode != 'major' else '') + '</key>'
         attributes = (f'<attributes><divisions>{divisions}</divisions>'
-                      '<key><fifths>0</fifths></key>'
+                      f'{key_xml}'
                       f'<time><beats>{score.beats}</beats>'
                       f'<beat-type>{score.beat_type}</beat-type></time>'
-                      '<clef><sign>G</sign><line>2</line></clef></attributes>')
+                      f'{clef_xml}</attributes>')
         body = ''.join(f'<measure number="{i}">{attributes if i == 1 else ""}{m}</measure>'
                        for i, m in enumerate(measures, 1))
         parts.append(f'<part id="P{len(parts) + 1}">{body}</part>')

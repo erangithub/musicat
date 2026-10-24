@@ -18,6 +18,21 @@ def play(score: Score):
         midi.instruments.append(instrument)
     try:
         from IPython.display import Audio, display
-        display(Audio(midi.synthesize(), rate=44100))
+        import numpy as np
+        try:
+            audio = midi.synthesize(fs=44100)
+        except Exception:
+            audio = None
+        if audio is not None:
+            audio = np.array(audio)
+            if audio.size == 0 or not np.isfinite(audio).all():
+                audio = np.zeros(int(44100 * 0.01), dtype=float)
+            elif np.max(np.abs(audio)) == 0:
+                audio = np.zeros(int(44100 * 0.01), dtype=float)
+            else:
+                audio = audio / np.max(np.abs(audio))
+            display(Audio(audio, rate=44100))
+        else:
+            display(Audio(np.zeros(int(44100 * 0.01)), rate=44100))
     except ImportError:
         pass

@@ -4,9 +4,11 @@ from .errors import SyntaxError
 
 
 class Part:
-    def __init__(self, idea, name='Music'):
+    def __init__(self, idea, name='Music', key=None, clef=None):
         self.idea = idea
         self.name = name
+        self.key = key
+        self.clef = clef
 
     def __str__(self):
         return self.name
@@ -40,6 +42,8 @@ class Score:
         self.time = time
         self.beats = beats
         self.beat_type = beat_type
+        self.clef = None
+        self.key = None
 
     def __str__(self):
         return f'{", ".join(str(part) for part in self.parts)} in {self.time}'
