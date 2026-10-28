@@ -2,7 +2,7 @@
 
 Bars 1-8.
 """
-from solfa import Idea, Part, Score, deg, major, pit, rhy
+from musicat import Idea, Part, Score, deg, major, pit, rhy
 
 C = major('c')
 

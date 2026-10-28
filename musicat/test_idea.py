@@ -1,9 +1,9 @@
 import pytest
 from fractions import Fraction as F
 
-from solfa import (Idea, Degrees, Part, Score, SyntaxError, format_pitches,
+from musicat import (Idea, Degrees, Part, Score, SyntaxError, format_pitches,
                      deg, major, minor, pit, rhy)
-from solfa.rhythm import (OpenMarker, CloseMarker, RestMarker, parse_rhythm,
+from musicat.rhythm import (OpenMarker, CloseMarker, RestMarker, parse_rhythm,
                           format_rhythm)
 
 SIXTH_DIM = pit('c4 d e f g ab a b c5')

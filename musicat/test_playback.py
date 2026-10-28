@@ -1,6 +1,6 @@
 import pytest
 
-from solfa import Part, Score, deg, rhy
+from musicat import Part, Score, deg, rhy
 
 
 @pytest.fixture
